@@ -12,10 +12,9 @@ Ground truth for whether an action was actually harmful comes from Anthropic's *
 
 | What | Where |
 |------|-------|
-| Benchmark / dataset | `INSIDER_LLM_DETECTION_BENCHMARK` (Hugging Face, link TBD) |
+| Benchmark / dataset | https://huggingface.co/datasets/samliumay/INSIDER_LLM_DETECTION_BENCHMARK |
 | Scenarios & classifiers we build on | https://github.com/anthropic-experimental/agentic-misalignment |
 | Paper we build on | https://www.anthropic.com/research/agentic-misalignment |
-| Project briefing, decisions, evaluation plan | `../BEFORE_RESEARCH_FOR_AGENT.md`, `../docs/` |
 
 ## Planned layout
 
@@ -29,6 +28,7 @@ INSIDER_LLM_DETECTION_CODE/
 │   ├── detectors/      # double-log detector + baselines (model-log-only, random)
 │   └── metrics/        # six outcome cells, detection rate, false-alarm rate
 ├── tests/              # pipeline + metrics only; the model is not tested
+├── results/            # one folder per run (gitignored except summaries)
 ├── Makefile
 └── README.md
 ```
@@ -41,12 +41,8 @@ cp .env.example .env        # API keys
 
 make data                   # generate prompts from configs/, run models, build logs → benchmark records
 make baseline               # model-log-only and random detectors
-make eval                   # double-log detector, six outcome cells, metrics → ../results/<run_id>/
+make eval                   # double-log detector, six outcome cells, metrics → results/<run_id>/
 make test                   # pytest on pipeline and metrics
 ```
 
-Every run writes its config, git hash, seed, model name, and dataset version into `../results/<run_id>/`.
-
-## Status
-
-Pre-experiment. Model list and kept conditions are TBD (see `../docs/evaluation_plan.md`).
+Every run writes its config, git hash, seed, model name, and dataset version into `results/<run_id>/`.
