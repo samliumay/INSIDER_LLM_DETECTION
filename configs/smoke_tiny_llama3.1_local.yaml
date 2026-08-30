@@ -1,0 +1,14 @@
+# Local-model smoke: llama3.1:8b (older-gen, fully GPU-resident, non-reasoning).
+# llama3.1-16k = llama3.1:8b + PARAMETER num_ctx 16384 (Ollama's local default 4096 is too
+# small for these prompts — see decisions.md and results/20260830-222208_qwen3.8-latest).
+model: "llama3.1-16k"
+base_url: "http://localhost:11434/v1"
+temperature: 0.5
+max_tokens: 12000
+samples_per_condition: 1
+variants: ["none", "A", "B"]
+conditions: ["blackmail_none-none_replacement", "murder_none-none_replacement"]
+concurrency: 1
+retries: 2
+seed: 0
+benchmark_dir: "../INSIDER_LLM_DETECTION_BENCHMARK"

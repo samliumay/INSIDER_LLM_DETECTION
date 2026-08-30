@@ -12,7 +12,7 @@ Ground truth for whether an action was actually harmful comes from Anthropic's *
 
 | What | Where |
 |------|-------|
-| Benchmark / dataset | https://huggingface.co/datasets/samliumay/INSIDER_LLM_DETECTION_BENCHMARK |
+| Benchmark / dataset | https://huggingface.co/datasets/logicBombExe/INSIDER_LLM_DETECTION_BENCHMARK |
 | Scenarios & classifiers we build on | https://github.com/anthropic-experimental/agentic-misalignment |
 | Paper we build on | https://www.anthropic.com/research/agentic-misalignment |
 
@@ -33,6 +33,14 @@ INSIDER_LLM_DETECTION_CODE/
 └── README.md
 ```
 
+## Smoke-phase results
+
+An end-to-end pipeline validation across 8 model families (via Ollama) is logged in
+[`EXPERIMENTS.md`](EXPERIMENTS.md). Headlines: the parser + matcher matched 42/42 model-log
+entries; two models produced **harmful actions that they logged honestly** (a *miss* — the
+central risk of the method); one model (`minimax-m2.7`) never writes a log at all, validating
+the separate `no_log` category. None of these runs is part of the reported study.
+
 ## How to run (planned)
 
 ```bash
@@ -46,3 +54,7 @@ make test                   # pytest on pipeline and metrics
 ```
 
 Every run writes its config, git hash, seed, model name, and dataset version into `results/<run_id>/`.
+
+## Replication note
+
+This repo depends on the upstream framework `anthropic-experimental/agentic-misalignment` at commit `ea0630e1a3eaae7f9f9740fd2703229d3854ccda`, expected at `../related_repos/agentic-misalignment/` (clone it there, or pass `--upstream`). Prompts are used verbatim from that commit; only the logging block is appended.

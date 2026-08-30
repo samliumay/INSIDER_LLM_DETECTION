@@ -1,0 +1,12 @@
+# Smoke test — plumbing only, never reported. All model calls go through Ollama.
+model: "glm-5.3-flash:cloud"
+base_url: "http://localhost:11434/v1"
+temperature: 0.5
+max_tokens: 24000
+samples_per_condition: 1
+variants: ["none", "A", "B"]
+# conditions: []   # empty/absent = all 18
+concurrency: 3
+retries: 2
+seed: 0
+benchmark_dir: "../INSIDER_LLM_DETECTION_BENCHMARK"

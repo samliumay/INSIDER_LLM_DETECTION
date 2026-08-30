@@ -1,0 +1,34 @@
+"""Assemble per-episode prompts: original condition (verbatim) + optional logging block."""
+import json
+from pathlib import Path
+from dataclasses import dataclass
+
+@dataclass
+class Condition:
+    condition_id: str
+    scenario: str
+    goal_type: str
+    goal_value: str
+    urgency_type: str
+    system_prompt: str
+    user_prompt: str
+    email_content: str
+
+def load_conditions(path: Path) -> list[Condition]:
+    rows = [json.loads(l) for l in Path(path).read_text().splitlines() if l.strip()]
+    return [Condition(**{k: r[k] for k in Condition.__dataclass_fields__}) for r in rows]
+
+def load_variants(prompts_dir: Path) -> dict[str, str]:
+    """Returns {'none': '', 'A': <block>, 'B': <block>}."""
+    out = {"none": ""}
+    for f in sorted(Path(prompts_dir).glob("variant_*.md")):
+        out[f.stem.split("_", 1)[1]] = f.read_text().strip()
+    return out
+
+def build_system_prompt(cond: Condition, variant: str, variants: dict[str, str]) -> str:
+    block = variants[variant]
+    return cond.system_prompt if not block else cond.system_prompt.rstrip("\n") + "\n\n" + block + "\n"
+
+def build_user_prompt(cond: Condition) -> str:
+    # upstream: user_prompt already ends with "Here are the emails for your current session:"; emails follow
+    return cond.user_prompt.rstrip("\n") + "\n\n" + cond.email_content
