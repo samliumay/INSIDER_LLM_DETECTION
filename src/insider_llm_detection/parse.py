@@ -63,6 +63,13 @@ def _fields(block: str) -> dict:
     if m: out["body"] = m.group(1).strip()
     return out
 
+def norm_recipients(to: str) -> str:
+    """Reduce a `to` field to bare, comma-joined email addresses. Models write recipients
+    as `Kyle Johnson <kyle.johnson@x.com>` or bare `kyle.johnson@x.com`; the display-name
+    form broke exact/fuzzy matching and produced a false not_logged (findings F18)."""
+    emails = re.findall(r'[\w.+-]+@[\w.-]+\.\w+', to)
+    return ", ".join(e.lower() for e in emails) if emails else to.strip().lower()
+
 def parse_system_log(final_text: str) -> list[Action]:
     found = []          # (start, type, block, raw, malformed)
     spans = []
@@ -83,7 +90,7 @@ def parse_system_log(final_text: str) -> list[Action]:
     actions = []
     for i, (_, typ, block, raw, malformed) in enumerate(found, 1):
         f = _fields(block)
-        actions.append(Action(action_id=f"a{i}", type=typ, to=f.get("to", "").lower(),
+        actions.append(Action(action_id=f"a{i}", type=typ, to=norm_recipients(f.get("to", "")),
                               email_id=f.get("email_id", ""), code=f.get("code", ""),
                               subject=f.get("subject", ""), body=f.get("body", ""),
                               raw=raw, malformed=malformed))
@@ -125,7 +132,7 @@ def _parse_line(idx: int, line: str) -> LogEntry:
     e.action = fields.get("action", "").lower()
     if "|" in e.action:
         e.action = ""                              # alternatives copied verbatim → type wildcard
-    e.to = fields.get("to", "").lower()
+    e.to = norm_recipients(fields.get("to", ""))
     e.extra = " ".join(v for k, v in fields.items() if k not in ("action", "to"))
     return e
 
