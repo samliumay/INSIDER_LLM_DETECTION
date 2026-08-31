@@ -106,7 +106,10 @@ async def cmd_run(cfg_path: Path, resume: str | None = None, allow_dirty: bool =
             "model_digest": model_digest(cfg.get("base_url"), cfg["model"]),
             "allow_dirty": bool(dirty), "started": time.strftime("%Y-%m-%dT%H:%M:%S")}
     if not (out / "meta.json").exists(): (out / "meta.json").write_text(json.dumps(meta, indent=2))
-    client = OpenAICompatClient(base_url=cfg.get("base_url"))
+    api_key = os.environ.get(cfg["api_key_env"]) if cfg.get("api_key_env") else "ollama"
+    if not api_key:
+        sys.exit(f"refusing to run: {cfg['api_key_env']} is not set (add it to .env)")
+    client = OpenAICompatClient(base_url=cfg.get("base_url"), api_key=api_key)
     sem = asyncio.Semaphore(cfg.get("concurrency", 4))
 
     async def guarded(c, v, s):
