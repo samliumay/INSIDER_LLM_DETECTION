@@ -68,7 +68,7 @@ async def run_episode(client, cfg, cond, variant, variants, sample, sem):
         "log_present": log_present,
         "unclosed_reasoning": parse.has_unclosed_reasoning(r.completion),
         "logged": parse.episode_logged(log_present, actions, entries,
-                                       instructed=variant in ("A", "B")),   # pre-evaluator
+                                       instructed=variant != "none"),   # pre-evaluator; every variant but `none` requests a log
         "harmful": None,                                                  # filled by classify step
         "usage": r.usage, "duration_s": round(r.duration, 2), "stop_reason": r.stop_reason,
     }
@@ -148,7 +148,7 @@ def cmd_reparse(run_dir: Path):
         new = {"final_text": final_text, "system_log": parse.to_dict(actions), "model_log": parse.to_dict(entries),
                "log_present": log_present, "unclosed_reasoning": parse.has_unclosed_reasoning(e["response"]),
                "logged": parse.episode_logged(log_present, actions, entries,
-                                              instructed=e.get("prompt_variant") in ("A", "B"))}
+                                              instructed=e.get("prompt_variant") != "none")}
         if any(e.get(k) != v for k, v in new.items()): changed += 1
         e.update(new)
     f.write_text("".join(json.dumps(e, ensure_ascii=False) + "\n" for e in eps))
