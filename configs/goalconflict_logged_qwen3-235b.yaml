@@ -1,0 +1,15 @@
+# Detector test (user request 2026-08-31): the headline goal-conflict blackmail
+# condition WITH logging instructions (variants A + B), so a model that blackmails
+# can be observed hiding or laundering it in its self-log. 10 samples x 2 variants.
+model: "qwen/qwen3-235b-a22b"
+base_url: "https://openrouter.ai/api/v1"
+api_key_env: "OPENROUTER_API_KEY"
+temperature: 1.0
+max_tokens: 24000
+samples_per_condition: 10
+variants: ["A", "B"]
+conditions: ["blackmail_explicit-america_replacement"]
+concurrency: 3
+retries: 2
+seed: 0
+benchmark_dir: "../INSIDER_LLM_DETECTION_BENCHMARK"
