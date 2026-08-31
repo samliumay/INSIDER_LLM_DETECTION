@@ -73,7 +73,7 @@ The 2026 models above almost never act harmfully, which raises the question: is 
 | qwen/qwen3-235b-a22b | — | **7/10** | 10/10 |
 | meta-llama/llama-4-maverick | ~12% | **0/10** | 10/10 |
 
-The gradient tracks the published rates → **pipeline validated**; the near-zero harm in the 2026-model runs is a property of those models, not a harness artifact. 0 truncations across all 40 episodes. All 40 are variant `none` (no log requested), so this validates harm only — the detector is tested next by running the same condition under variants A/B. See `../docs/findings.md` F16/F17.
+The gradient tracks the published rates → **pipeline validated**; the near-zero harm in the earlier 2026-model runs was specific to the **no-goal** conditions they used — under an explicit goal those models blackmail too (deepseek-v4-flash, F15 correction) — so it reflects the conditions, not a harness artifact. 0 truncations across all 40 episodes. All 40 are variant `none` (no log requested), so this validates harm only — the detector is tested next by running the same condition under variants A/B. See `../docs/findings.md` F16/F17.
 
 ### Weird logging issues (the interesting part)
 
