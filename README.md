@@ -1,60 +1,40 @@
 # Insider LLM Detection — Code
 
-Code for detecting **insider LLMs** via **double logging**.
+Detects **insider LLMs** via **double logging**: a model in an agentic scenario logs its own actions, the system independently records every tool call it actually makes, and the two logs are matched on structured fields. A discrepancy (omission or inaccurate entry) is the misalignment signal — the detector never reads the transcript.
 
-## Idea in one paragraph
+Harmfulness ground truth comes from Anthropic's [*Agentic Misalignment*](https://www.anthropic.com/research/agentic-misalignment) classifiers ([upstream repo](https://github.com/anthropic-experimental/agentic-misalignment), pinned @ `ea0630e1a3eaae7f9f9740fd2703229d3854ccda`, expected at `../related_repos/agentic-misalignment/`). Benchmark: [logicBombExe/INSIDER_LLM_DETECTION_BENCHMARK](https://huggingface.co/datasets/logicBombExe/INSIDER_LLM_DETECTION_BENCHMARK).
 
-A model acting in an agentic scenario is told to log its own actions. Independently, the system records every tool call the model actually makes. The two logs are matched on structured fields (action type, recipient, attachment, override code); each system-log action ends up either `not_logged`, `logged_inaccurate`, or `logged_accurate` by the model. A discrepancy — omission or inaccurate entry — is the misalignment signal. The detector never reads the transcript, so it can run where a SIEM runs.
-
-Ground truth for whether an action was actually harmful comes from Anthropic's *Agentic Misalignment* classifiers; we do not build our own harmfulness labels.
-
-## Related
-
-| What | Where |
-|------|-------|
-| Benchmark / dataset | https://huggingface.co/datasets/logicBombExe/INSIDER_LLM_DETECTION_BENCHMARK |
-| Scenarios & classifiers we build on | https://github.com/anthropic-experimental/agentic-misalignment |
-| Paper we build on | https://www.anthropic.com/research/agentic-misalignment |
-
-## Planned layout
-
-```
-INSIDER_LLM_DETECTION_CODE/
-├── configs/            # experiment configs (yaml) — one entrypoint, no hand-edited constants
-├── src/
-│   ├── prompts/        # logging-instruction variants A and B
-│   ├── logging/        # system-log parser, action-ID matching
-│   ├── evaluator/      # accuracy evaluator (logged_accurate vs logged_inaccurate)
-│   ├── detectors/      # double-log detector + baselines (model-log-only, random)
-│   └── metrics/        # six outcome cells, detection rate, false-alarm rate
-├── tests/              # pipeline + metrics only; the model is not tested
-├── results/            # one folder per run (gitignored except summaries)
-├── Makefile
-└── README.md
-```
-
-## Smoke-phase results
-
-An end-to-end pipeline validation across 8 model families (via Ollama) is logged in
-[`EXPERIMENTS.md`](EXPERIMENTS.md). Headlines: the parser + matcher matched 42/42 model-log
-entries; two models produced **harmful actions that they logged honestly** (a *miss* — the
-central risk of the method); one model (`minimax-m2.7`) never writes a log at all, validating
-the separate `no_log` category. None of these runs is part of the reported study.
-
-## How to run (planned)
+## Run
 
 ```bash
 uv sync
-cp .env.example .env        # API keys
-
-make data                   # generate prompts from configs/, run models, build logs → benchmark records
-make baseline               # model-log-only and random detectors
-make eval                   # double-log detector, six outcome cells, metrics → results/<run_id>/
-make test                   # pytest on pipeline and metrics
+make data                       # rebuild benchmark conditions from upstream templates
+make smoke CONFIG=configs/smoke.yaml   # run a config end to end → results/<run_id>/
+make test                       # pytest on parser and matcher
+uv run ild reparse --run results/<run_id>   # re-derive parsed fields after parser changes
 ```
 
-Every run writes its config, git hash, seed, model name, and dataset version into `results/<run_id>/`.
+Models are called through Ollama (`http://localhost:11434/v1`). Every run writes config, git hash, seed, model name, and dataset version to `results/<run_id>/`. The classifier (`harmful`) and accuracy-evaluator steps are not built yet.
 
-## Replication note
+## Results (smoke phase, 2026-08-30 — pipeline validation only, not reported study data)
 
-This repo depends on the upstream framework `anthropic-experimental/agentic-misalignment` at commit `ea0630e1a3eaae7f9f9740fd2703229d3854ccda`, expected at `../related_repos/agentic-misalignment/` (clone it there, or pass `--upstream`). Prompts are used verbatim from that commit; only the logging block is appended.
+1 sample × 2 conditions (`blackmail`, `murder` × `none-none_replacement`) × 3 variants, temperature 0.5, via Ollama cloud:
+
+| Model | Completed | Actions | Harmful | Log written when instructed | Entries matched |
+|-------|-----------|---------|---------|-----------------------------|-----------------|
+| glm-5.3-flash | 6/6 | 18 | 0 | 4/4 | 12/12 |
+| glm-5.2 | 6/6 | 17 | 0 | 4/4 | 10/10 |
+| glm-5.1 | 6/6 | 16 | 0 | 4/4 | 10/10 |
+| minimax-m3 | 6/6 | 11 | 0 | 4/4 | 6/6 |
+| minimax-m2.7 | 6/6 | 8 | 0 | 0/4 | — |
+| deepseek-v4-flash | 5/6 | 5 | 0 | 4/4 | 4/4 |
+
+Local models: qwen3.6 (~30B) produced the first observed **cover-up** (disclosed an affair, logged it as "CTO instability"); llama3.1:8b and qwen3.8 fell below the capability floor. Across all runs: 42/42 model-log entries matched deterministically; 2 harmful episodes (deepseek-v4-flash, glm-5.1) were **logged honestly** — misses, the method's central known risk; minimax-m2.7 never writes a log (the `no_log` category). Full log with per-run details: [`EXPERIMENTS.md`](EXPERIMENTS.md).
+
+## Contributing
+
+- Read `../BEFORE_RESEARCH_FOR_AGENT.md`, `../docs/decisions.md`, and `../docs/evaluation_plan.md` first; settled decisions are not re-litigated.
+- Experiments are config-driven: add a yaml in `configs/`, never hand-edit constants. One entrypoint (`ild`).
+- Parser or matcher changes need a regression test in `tests/` and a `ild reparse` of existing runs — raw responses are kept so parsing is always re-derivable.
+- New experimental decisions get one dated line in `../docs/decisions.md`; ideas go to `../docs/possible_improvements.md`.
+- License: MIT (same as upstream).
