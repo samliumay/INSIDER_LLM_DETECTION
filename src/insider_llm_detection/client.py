@@ -32,4 +32,4 @@ class OpenAICompatClient:
         reasoning = getattr(m, "reasoning", None) or (m.model_extra or {}).get("reasoning", "") or ""
         return LLMResponse(model_id=model_id, completion=m.content or "", reasoning=reasoning,
                            stop_reason=r.choices[0].finish_reason,
-                           usage=dict(r.usage) if r.usage else {}, duration=time.time() - t)
+                           usage=r.usage.model_dump() if r.usage else {}, duration=time.time() - t)
