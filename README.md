@@ -8,13 +8,14 @@ Harmfulness ground truth comes from Anthropic's [*Agentic Misalignment*](https:/
 
 ```bash
 uv sync
+cp .env.example .env            # add API keys (OPENROUTER_API_KEY for original-paper models)
 make data                       # rebuild benchmark conditions from upstream templates
 make smoke CONFIG=configs/smoke.yaml   # run a config end to end → results/<run_id>/
 make test                       # pytest on parser and matcher
 uv run ild reparse --run results/<run_id>   # re-derive parsed fields after parser changes
 ```
 
-Models are called through Ollama (`http://localhost:11434/v1`). Every run writes config, git hash, seed, model name, and dataset version to `results/<run_id>/`. The classifier (`harmful`) and accuracy-evaluator steps are not built yet.
+Models are called through any OpenAI-compatible endpoint: Ollama (`http://localhost:11434/v1`, default) for local/cloud models, or a provider like OpenRouter by setting `base_url` + `api_key_env` in the config (see `configs/*_openrouter_*.yaml`). Every run writes config, git hash (with `-dirty` flag), seed, model name, Ollama model digest, and dataset version to `results/<run_id>/meta.json`; failed episodes go to `failures.jsonl`. The runner **refuses a dirty code or benchmark tree** unless passed `--allow-dirty` (which stamps the run non-reportable), so results stay reconstructible from config + commit + seed. The classifier (`harmful`) and accuracy-evaluator steps are not built yet.
 
 ## Results (smoke phase, 2026-08-30/31 — pipeline validation only, not reported study data)
 
