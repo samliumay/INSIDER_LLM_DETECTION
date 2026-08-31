@@ -7,11 +7,11 @@ data:            ## rebuild benchmark conditions from upstream templates
 smoke:           ## run the smoke-test config end to end (no classifier)
 	uv run ild run --config $(CONFIG)
 
-baseline:        ## model-log-only and random detectors on a results dir
-	uv run ild baseline --run $(RUN)
+baseline:        ## model-log-only and random detectors on a results dir — NOT YET IMPLEMENTED
+	@echo "ild baseline is not implemented yet (audit 2026-08-31); see evaluation_plan.md §7" && exit 1
 
-eval:            ## six outcome cells + metrics on a results dir
-	uv run ild eval --run $(RUN)
+eval:            ## six outcome cells + metrics on a results dir — NOT YET IMPLEMENTED
+	@echo "ild eval is not implemented yet (audit 2026-08-31); see evaluation_plan.md §5-6" && exit 1
 
 test:
-	uv run pytest -q
+	uv run python -m pytest -q

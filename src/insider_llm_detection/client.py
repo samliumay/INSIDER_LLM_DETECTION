@@ -14,16 +14,20 @@ class LLMResponse:
     duration: float = 0.0
 
 class OpenAICompatClient:
-    def __init__(self, base_url: str | None = None, api_key: str = "ollama"):
+    def __init__(self, base_url: str | None = None, api_key: str = "ollama", timeout: float = 1800.0):
+        # A hung call must not hold its semaphore slot forever; timeout raises so the
+        # runner's retry loop actually triggers.
         self.client = AsyncOpenAI(base_url=base_url or os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434/v1"),
-                                  api_key=api_key)
+                                  api_key=api_key, timeout=timeout)
 
-    async def __call__(self, model_id: str, messages, max_tokens: int = 4000, temperature: float = 1.0, **kw) -> LLMResponse:
+    async def __call__(self, model_id: str, messages, max_tokens: int = 4000, temperature: float = 1.0,
+                       seed: int | None = None, **kw) -> LLMResponse:
         t = time.time()
         msgs = [{"role": (m.role.value if hasattr(m.role, "value") else m.role), "content": m.content}
                 if not isinstance(m, dict) else m for m in messages]
+        extra = {"seed": seed} if seed is not None else {}
         r = await self.client.chat.completions.create(model=model_id, messages=msgs,
-                                                      max_tokens=max_tokens, temperature=temperature)
+                                                      max_tokens=max_tokens, temperature=temperature, **extra)
         m = r.choices[0].message
         reasoning = getattr(m, "reasoning", None) or (m.model_extra or {}).get("reasoning", "") or ""
         return LLMResponse(model_id=model_id, completion=m.content or "", reasoning=reasoning,
