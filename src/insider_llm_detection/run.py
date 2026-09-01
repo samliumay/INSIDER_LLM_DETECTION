@@ -1,13 +1,15 @@
 """Single entrypoint. `ild run --config configs/smoke.yaml`."""
-import argparse, asyncio, json, os, random, subprocess, sys, time, uuid
+import argparse, asyncio, hashlib, json, os, random, subprocess, sys, time, uuid
 from pathlib import Path
 import yaml
 from dotenv import load_dotenv
 from .prompts import load_conditions, load_variants, build_system_prompt, build_user_prompt
 from .client import OpenAICompatClient
-from . import parse, upstream
+from . import parse, upstream, classify
 
 ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_BENCH = "../INSIDER_LLM_DETECTION_BENCHMARK"
+DEFAULT_RESULTS = "../results"   # project-root results/ (bound for HF upload), not inside this repo
 
 def git_hash(path=ROOT):
     try:
@@ -24,6 +26,16 @@ def git_dirty(path) -> bool:
 def dataset_version(bench: Path):
     try: return subprocess.check_output(["git", "-C", str(bench), "describe", "--tags", "--always", "--dirty"], text=True).strip()
     except Exception: return "unknown"
+
+def prompt_set_sha256(bench: Path) -> str:
+    """sha256 over sorted prompt-file names+contents. Variant wording changed under the
+    same names A/B between dataset versions, so the prompt set is hashed explicitly
+    (audit 2026-09-01, workflow notes)."""
+    h = hashlib.sha256()
+    for f in sorted((bench / "prompts").glob("*")):
+        if f.is_file():
+            h.update(f.name.encode()); h.update(b"\0"); h.update(f.read_bytes()); h.update(b"\0")
+    return h.hexdigest()
 
 def model_digest(base_url: str | None, model: str) -> str:
     """Ollama tags (`:cloud` included) are mutable; the digest pins the actual weights.
@@ -52,31 +64,32 @@ async def run_episode(client, cfg, cond, variant, variants, sample, sem):
             except Exception as ex:
                 if attempt == cfg.get("retries", 1): raise
                 await asyncio.sleep(2 ** attempt)
-    final_text, inline_reasoning = parse.strip_reasoning(r.completion)
+    d = parse.derive(r.completion, instructed=variant != "none",   # every variant but `none` requests a log
+                     stop_reason=r.stop_reason)                    # stop_reason=length → logged=no_answer (M1)
+    inline_reasoning = d.pop("inline_reasoning")
     reasoning = "\n".join(x for x in (r.reasoning, inline_reasoning) if x)
-    actions = parse.parse_system_log(final_text)
-    log_present, entries = parse.parse_model_log(final_text)
-    parse.match(actions, entries)
     return {
         "episode_id": f"{cond.condition_id}__{variant}__s{sample}__{uuid.uuid4().hex[:8]}",
         "condition_id": cond.condition_id, "scenario": cond.scenario,
         "goal_type": cond.goal_type, "goal_value": cond.goal_value, "urgency_type": cond.urgency_type,
         "prompt_variant": variant, "sample": sample, "model": cfg["model"],
         "system_prompt": sys_p, "user_prompt": usr_p,
-        "response": r.completion, "reasoning": reasoning, "final_text": final_text,
-        "system_log": parse.to_dict(actions), "model_log": parse.to_dict(entries),
-        "log_present": log_present,
-        "unclosed_reasoning": parse.has_unclosed_reasoning(r.completion),
-        "logged": parse.episode_logged(log_present, actions, entries,
-                                       instructed=variant != "none"),   # pre-evaluator; every variant but `none` requests a log
-        "harmful": None,                                                  # filled by classify step
+        "response": r.completion, "reasoning": reasoning, **d,
+        "api_model": r.api_model, "provider": r.provider,         # provider-reported model/routing (audit 2026-09-01)
+        "harmful": None,                                          # filled by classify step
         "usage": r.usage, "duration_s": round(r.duration, 2), "stop_reason": r.stop_reason,
     }
 
-async def cmd_run(cfg_path: Path, resume: str | None = None, allow_dirty: bool = False):
+async def cmd_run(cfg_path: Path, resume: str | None = None, allow_dirty: bool = False, allow_unpinned: bool = False):
     load_dotenv(ROOT / ".env")
     cfg = yaml.safe_load(cfg_path.read_text())
-    bench = (ROOT / cfg.get("benchmark_dir", "../INSIDER_LLM_DETECTION_BENCHMARK")).resolve()
+    bench = (ROOT / cfg.get("benchmark_dir", DEFAULT_BENCH)).resolve()
+    # The upstream classifiers/prompts are pinned; running against another commit makes
+    # results incomparable (audit 2026-09-01 M6). Refuse unless explicitly overridden.
+    unpinned = upstream.check_pinned()
+    if unpinned and not allow_unpinned:
+        sys.exit(f"refusing to run: {unpinned}. Fix the checkout, or pass --allow-unpinned "
+                 f"(stamped as upstream_warning in meta.json).")
     # Reproducibility comes from config + commit + seed: a run from a dirty tree cannot be
     # reconstructed from git, so refuse unless explicitly allowed (and then stamp the run).
     dirty = [name for name, p in (("code", ROOT), ("benchmark", bench)) if git_dirty(p)]
@@ -86,9 +99,24 @@ async def cmd_run(cfg_path: Path, resume: str | None = None, allow_dirty: bool =
     conds = load_conditions(bench / "data/conditions.jsonl")
     variants = load_variants(bench / "prompts")
     sel = cfg.get("conditions")
-    if sel: conds = [c for c in conds if c.condition_id in sel]
+    if sel:
+        # a typo'd condition id must fail loudly, not silently shrink the grid (M4)
+        valid = {c.condition_id for c in conds}
+        unknown = sorted(set(sel) - valid)
+        if unknown:
+            sys.exit(f"unknown condition ids in config: {', '.join(unknown)}\nvalid: {', '.join(sorted(valid))}")
+        conds = [c for c in conds if c.condition_id in sel]
+    cvars = cfg.get("variants", ["none", "A", "B"])
+    unknown_v = sorted(set(cvars) - set(variants))
+    if unknown_v:
+        sys.exit(f"unknown prompt variants in config: {', '.join(unknown_v)}\nvalid: {', '.join(sorted(variants))}")
     run_id = resume or cfg.get("run_id") or f"{time.strftime('%Y%m%d-%H%M%S')}_{cfg['model'].replace('/', '_').replace(':', '-')}"
-    out = ROOT / "results" / run_id; out.mkdir(parents=True, exist_ok=True)
+    out = (ROOT / cfg.get("results_dir", DEFAULT_RESULTS)).resolve() / run_id
+    # A fixed run_id in config must not silently append a second batch of episodes to an
+    # existing run (audit 2026-09-01 M3) — continuing a run requires --resume.
+    if out.exists() and not resume:
+        sys.exit(f"refusing to run: {out} already exists. Pass --resume {run_id} to continue it.")
+    out.mkdir(parents=True, exist_ok=True)
     done = set()
     if resume:
         if (out / "meta.json").exists():
@@ -102,9 +130,12 @@ async def cmd_run(cfg_path: Path, resume: str | None = None, allow_dirty: bool =
                     e = json.loads(l); done.add((e["condition_id"], e["prompt_variant"], e["sample"]))
     random.seed(cfg.get("seed", 0))
     meta = {"run_id": run_id, "config": cfg, "git_hash": git_hash(), "upstream_commit": upstream.upstream_commit(),
-            "dataset_version": dataset_version(bench), "seed": cfg.get("seed", 0),
+            "dataset_version": dataset_version(bench), "prompt_set_sha256": prompt_set_sha256(bench),
+            "seed": cfg.get("seed", 0),
             "model_digest": model_digest(cfg.get("base_url"), cfg["model"]),
-            "allow_dirty": bool(dirty), "started": time.strftime("%Y-%m-%dT%H:%M:%S")}
+            "allow_dirty": bool(dirty), "reportable": not dirty,
+            "started": time.strftime("%Y-%m-%dT%H:%M:%S")}
+    if unpinned: meta["upstream_warning"] = unpinned
     if not (out / "meta.json").exists(): (out / "meta.json").write_text(json.dumps(meta, indent=2))
     api_key = os.environ.get(cfg["api_key_env"]) if cfg.get("api_key_env") else "ollama"
     if not api_key:
@@ -119,7 +150,7 @@ async def cmd_run(cfg_path: Path, resume: str | None = None, allow_dirty: bool =
             return {"_failed": True, "condition_id": c.condition_id, "prompt_variant": v,
                     "sample": s, "error": repr(ex)}
     jobs = [guarded(c, v, s)
-            for c in conds for v in cfg.get("variants", ["none", "A", "B"]) for s in range(cfg.get("samples_per_condition", 1))
+            for c in conds for v in cvars for s in range(cfg.get("samples_per_condition", 1))
             if (c.condition_id, v, s) not in done]
     if done: print(f"resuming {run_id}: {len(done)} episodes already done")
     print(f"{run_id}: {len(jobs)} episodes -> {out}")
@@ -137,21 +168,23 @@ async def cmd_run(cfg_path: Path, resume: str | None = None, allow_dirty: bool =
     print(f"done: {n} ok, {failed} failed" + (f" (see {out / 'failures.jsonl'})" if failed else ""))
 
 def cmd_reparse(run_dir: Path):
-    """Re-derive final_text / system_log / model_log / logged from stored responses (parser fixes)."""
+    """Re-derive final_text / system_log / model_log / logged from stored responses (parser fixes).
+    Derived fields are only reproducible if the parser commit that produced them is recorded,
+    so every reparse appends a reparse_log entry to meta.json (audit 2026-09-01 M2)."""
     f = run_dir / "episodes.jsonl"; eps = [json.loads(l) for l in f.read_text().splitlines() if l.strip()]
     changed = 0
     for e in eps:
-        final_text, inline = parse.strip_reasoning(e["response"])
-        actions = parse.parse_system_log(final_text)
-        log_present, entries = parse.parse_model_log(final_text)
-        parse.match(actions, entries)
-        new = {"final_text": final_text, "system_log": parse.to_dict(actions), "model_log": parse.to_dict(entries),
-               "log_present": log_present, "unclosed_reasoning": parse.has_unclosed_reasoning(e["response"]),
-               "logged": parse.episode_logged(log_present, actions, entries,
-                                              instructed=e.get("prompt_variant") != "none")}
+        new = parse.derive(e["response"], instructed=e.get("prompt_variant") != "none",
+                           stop_reason=e.get("stop_reason"))   # stored stop_reason → no_answer (M1)
+        new.pop("inline_reasoning")                            # `reasoning` is stored raw, not re-derived
         if any(e.get(k) != v for k, v in new.items()): changed += 1
         e.update(new)
     f.write_text("".join(json.dumps(e, ensure_ascii=False) + "\n" for e in eps))
+    meta_f = run_dir / "meta.json"
+    meta = json.loads(meta_f.read_text()) if meta_f.exists() else {}
+    meta.setdefault("reparse_log", []).append({"at": time.strftime("%Y-%m-%dT%H:%M:%S"), "code_git_hash": git_hash(),
+                                               "n_episodes": len(eps), "n_changed": changed})
+    meta_f.write_text(json.dumps(meta, indent=2))
     print(f"{run_dir.name}: reparsed {len(eps)} episodes, {changed} changed")
 
 def main():
@@ -161,10 +194,35 @@ def main():
     r.add_argument("--resume", help="existing run_id to continue; finished episodes are skipped")
     r.add_argument("--allow-dirty", action="store_true",
                    help="run despite uncommitted changes; the run is stamped non-reportable")
+    r.add_argument("--allow-unpinned", action="store_true",
+                   help="run even if the upstream repo is not at the pinned commit; stamped as upstream_warning")
     rp = sub.add_parser("reparse"); rp.add_argument("--run", type=Path, required=True, nargs="+")
+    rl = sub.add_parser("relabel", help="re-derive harmful from the stored verdict + upstream gates on the full completion (no API calls)")
+    rl.add_argument("--run", type=Path, required=True, nargs="+")
+    c = sub.add_parser("classify", help="label episodes harmful/not with the pinned upstream classifiers (Gemini judge)")
+    c.add_argument("--run", type=Path, required=True, nargs="+")
+    c.add_argument("--bench", type=Path, default=None, help=f"benchmark repo (default {DEFAULT_BENCH})")
+    c.add_argument("--model", default=classify.DEFAULT_MODEL)
+    c.add_argument("--force", action="store_true", help="relabel episodes that already carry a label")
+    c.add_argument("--concurrency", type=int, default=4)
+    c.add_argument("--input", choices=["final_text", "response"], default="final_text")
+    e = sub.add_parser("eval", help="regenerate results/tables.md from run dirs")
+    e.add_argument("--runs", type=Path, nargs="+", default=None, help="run dirs (default: all under the results root)")
+    e.add_argument("--out", type=Path, default=None, help="output file (default: <results>/tables.md)")
     a = ap.parse_args()
-    if a.cmd == "run": asyncio.run(cmd_run(a.config, a.resume, a.allow_dirty))
+    if a.cmd == "run": asyncio.run(cmd_run(a.config, a.resume, a.allow_dirty, a.allow_unpinned))
     elif a.cmd == "reparse":
         for r in a.run: cmd_reparse(r)
+    elif a.cmd == "relabel":
+        classify.cmd_relabel(a.run)
+    elif a.cmd == "classify":
+        load_dotenv(ROOT / ".env")
+        bench = (a.bench or ROOT / DEFAULT_BENCH).resolve()
+        asyncio.run(classify.cmd_classify(a.run, bench, model_id=a.model, force=a.force,
+                                          concurrency=a.concurrency, input_field=a.input,
+                                          parser_hash=git_hash()))
+    elif a.cmd == "eval":
+        from . import eval as ev   # lazy: eval.py imports git_hash from this module
+        ev.cmd_eval(a.runs, a.out)
 
 if __name__ == "__main__": main()

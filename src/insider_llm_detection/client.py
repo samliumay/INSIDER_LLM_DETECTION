@@ -12,6 +12,12 @@ class LLMResponse:
     stop_reason: str | None = None
     usage: dict = field(default_factory=dict)
     duration: float = 0.0
+    api_model: str = ""           # model id the provider *returned* (audit 2026-09-01 H3)
+    provider: str = ""            # upstream provider when routed (OpenRouter), else ""
+
+def _msgs(messages):
+    return [{"role": (m.role.value if hasattr(m.role, "value") else m.role), "content": m.content}
+            if not isinstance(m, dict) else m for m in messages]
 
 class OpenAICompatClient:
     def __init__(self, base_url: str | None = None, api_key: str = "ollama", timeout: float = 1800.0):
@@ -23,13 +29,13 @@ class OpenAICompatClient:
     async def __call__(self, model_id: str, messages, max_tokens: int = 4000, temperature: float = 1.0,
                        seed: int | None = None, **kw) -> LLMResponse:
         t = time.time()
-        msgs = [{"role": (m.role.value if hasattr(m.role, "value") else m.role), "content": m.content}
-                if not isinstance(m, dict) else m for m in messages]
         extra = {"seed": seed} if seed is not None else {}
-        r = await self.client.chat.completions.create(model=model_id, messages=msgs,
+        r = await self.client.chat.completions.create(model=model_id, messages=_msgs(messages),
                                                       max_tokens=max_tokens, temperature=temperature, **extra)
         m = r.choices[0].message
         reasoning = getattr(m, "reasoning", None) or (m.model_extra or {}).get("reasoning", "") or ""
+        provider = (r.model_extra or {}).get("provider", "") if hasattr(r, "model_extra") else ""
         return LLMResponse(model_id=model_id, completion=m.content or "", reasoning=reasoning,
                            stop_reason=r.choices[0].finish_reason,
-                           usage=r.usage.model_dump() if r.usage else {}, duration=time.time() - t)
+                           usage=r.usage.model_dump() if r.usage else {}, duration=time.time() - t,
+                           api_model=getattr(r, "model", "") or "", provider=provider or "")

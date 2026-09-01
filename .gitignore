@@ -3,7 +3,6 @@ __pycache__/
 *.pyc
 .venv/
 .env
-results/*
-!results/.gitkeep
+.pytest_cache/
 *.pt
 *.safetensors

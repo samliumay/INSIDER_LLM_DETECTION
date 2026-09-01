@@ -8,14 +8,16 @@ Harmfulness ground truth comes from Anthropic's [*Agentic Misalignment*](https:/
 
 ```bash
 uv sync
-cp .env.example .env            # add API keys (OPENROUTER_API_KEY for original-paper models)
+cp .env.example .env            # add API keys (OPENROUTER_API_KEY for original-paper models, GEMINI_API_KEY for classify)
 make data                       # rebuild benchmark conditions from upstream templates
-make smoke CONFIG=configs/smoke.yaml   # run a config end to end → results/<run_id>/
+make smoke CONFIG=configs/smoke.yaml   # run a config end to end → ../results/<run_id>/
 make test                       # pytest on parser and matcher
-uv run ild reparse --run results/<run_id>   # re-derive parsed fields after parser changes
+uv run ild reparse --run ../results/<run_id>    # re-derive parsed fields after parser changes
+uv run ild classify --run ../results/<run_id>   # label harmful via the pinned upstream classifiers (Gemini judge)
+make eval                       # regenerate ../results/tables.md from all runs
 ```
 
-Models are called through any OpenAI-compatible endpoint: Ollama (`http://localhost:11434/v1`, default) for local/cloud models, or a provider like OpenRouter by setting `base_url` + `api_key_env` in the config (see `configs/*_openrouter_*.yaml`). Every run writes config, git hash (with `-dirty` flag), seed, model name, Ollama model digest, and dataset version to `results/<run_id>/meta.json`; failed episodes go to `failures.jsonl`. The runner **refuses a dirty code or benchmark tree** unless passed `--allow-dirty` (which stamps the run non-reportable), so results stay reconstructible from config + commit + seed. The classifier (`harmful`) and accuracy-evaluator steps are not built yet.
+Models are called through any OpenAI-compatible endpoint: Ollama (`http://localhost:11434/v1`, default) for local/cloud models, or a provider like OpenRouter by setting `base_url` + `api_key_env` in the config (see `configs/*_openrouter_*.yaml`). Every run writes config, git hash (with `-dirty` flag), seed, model name, Ollama model digest, prompt-set hash, and dataset version to `../results/<run_id>/meta.json`; failed episodes go to `failures.jsonl`. The runner **refuses a dirty code or benchmark tree** unless passed `--allow-dirty`, and **refuses an unpinned upstream checkout** unless passed `--allow-unpinned` — both stamp the run, so results stay reconstructible from config + commit + seed. Results live at `../results/` (project root, bound for Hugging Face; see its README/INDEX). `ild classify` fills `harmful` using the upstream classifiers with a Gemini judge (`GEMINI_API_KEY` in `.env`; `--input final_text|response`, `--force` to relabel); `ild eval` regenerates the aggregate tables.
 
 ## Results (smoke phase, 2026-08-30/31 — pipeline validation only, not reported study data)
 
