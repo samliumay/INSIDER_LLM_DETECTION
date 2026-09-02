@@ -12,7 +12,7 @@ class LLMResponse:
     stop_reason: str | None = None
     usage: dict = field(default_factory=dict)
     duration: float = 0.0
-    api_model: str = ""           # model id the provider *returned* (audit 2026-09-01 H3)
+    api_model: str = ""           # model id the provider *returned* (code review 2026-09-01)
     provider: str = ""            # upstream provider when routed (OpenRouter), else ""
 
 def _msgs(messages):

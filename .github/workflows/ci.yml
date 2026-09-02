@@ -69,6 +69,6 @@ jobs:
       - uses: actions/checkout@v4
       - name: retired vocabulary must not reappear
         run: |
-          if grep -nE "reportable[^_]|zero .not_logged. episodes exist|two (true )?omissions|observed twice" README.md EXPERIMENTS.md; then
-            echo "retired vocabulary found (see docs/audits/2026-09-01 in the research workspace)"; exit 1
+          if grep -nE "reportable[^_]|zero .not_logged. episodes exist|two (true )?omissions|observed twice|BEFORE_RESEARCH|decisions\.md|evaluation_plan|findings\.md|possible_improvements|power_analysis|docs/audits|internal (research )?workspace|standalone repository" README.md EXPERIMENTS.md; then
+            echo "retired vocabulary found (see EXPERIMENTS.md)"; exit 1
           fi

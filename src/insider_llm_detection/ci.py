@@ -5,7 +5,7 @@ fixture-check  re-derives every parser field from the raw `response` of the comm
                from the stored fields or from expected.json. Every transition into
                `not_logged` is printed with its raw tool-call blocks — the same guard
                `ild reparse` applies to real runs (a parser bug must never masquerade as
-               an omission: findings F7, F14, F18, review 2026-09-02).
+               an omission — three earlier incidents and the 2026-09-02 review).
 check-configs  loads every configs/*.yaml and applies the same validation `ild run` does
                before it would spend money: `phase` declared, condition ids and variant
                names exist in the benchmark, required keys present.

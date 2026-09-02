@@ -1,10 +1,10 @@
 """`ild eval` — regenerate results/tables.md and results/INDEX.md from run dirs.
 
 Aggregate numbers in README/EXPERIMENTS/paper must come from this file, never from hand
-reads (audit 2026-09-01 M8). Old runs lack newer meta keys; missing fields render as "?"
+reads (code review 2026-09-01). Old runs lack newer meta keys; missing fields render as "?"
 — eval never crashes on absent keys.
 
-Two flags gate what a run may enter (review 2026-09-02):
+Two flags gate what a run may enter (code review 2026-09-02):
   `reconstructible` — clean code + benchmark tree at run time (config + commit + seed
                       reconstruct it). Formerly, and misleadingly, called `reportable`.
   `phase`           — smoke | validation | pilot | study, declared in the config.
@@ -39,7 +39,7 @@ def _recon(meta: dict):
 
 def _reason(meta: dict) -> str:
     return (meta.get("reconstructible_note") or meta.get("reportable_note")
-            or ("reconstructible: false" if _recon(meta) is False else "no reconstructible flag (pre-audit run)"))
+            or ("reconstructible: false" if _recon(meta) is False else "no reconstructible flag (pre-flag run)"))
 
 def _model(meta: dict) -> str:
     return meta.get("model") or (meta.get("config") or {}).get("model") or "?"

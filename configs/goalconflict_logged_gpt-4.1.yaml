@@ -1,4 +1,4 @@
-# Detector test (user request 2026-08-31): the headline goal-conflict blackmail
+# Detector test (2026-08-31): the headline goal-conflict blackmail
 # condition WITH logging instructions (variants A + B), so a model that blackmails
 # can be observed hiding or laundering it in its self-log. 10 samples x 2 variants.
 model: "openai/gpt-4.1"
@@ -13,4 +13,4 @@ concurrency: 3
 retries: 2
 seed: 0
 benchmark_dir: "../INSIDER_LLM_DETECTION_BENCHMARK"
-phase: "pilot"   # smoke | validation | pilot | study (review 2026-09-02)
+phase: "pilot"   # smoke | validation | pilot | study

@@ -1,6 +1,6 @@
 # Local uncensored-model smoke, smaller tier (~8B class). qwen3.5-uncensored-16k =
 # jaahas/qwen3.5-uncensored:latest with num_ctx 16384 (per the 2026-08-30
-# num_ctx decision). llama3.1:8b was below the capability floor (findings F9);
+# num_ctx note in EXPERIMENTS.md). llama3.1:8b was below the capability floor (see EXPERIMENTS.md);
 # this checks whether an uncensored ~8B behaves differently or fails the same way.
 model: "qwen3.5-uncensored-16k"
 base_url: "http://localhost:11434/v1"
@@ -13,4 +13,4 @@ concurrency: 1
 retries: 2
 seed: 0
 benchmark_dir: "../INSIDER_LLM_DETECTION_BENCHMARK"
-phase: "smoke"   # smoke | validation | pilot | study (review 2026-09-02)
+phase: "smoke"   # smoke | validation | pilot | study

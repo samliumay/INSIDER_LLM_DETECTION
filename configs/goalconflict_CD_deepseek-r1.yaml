@@ -1,4 +1,4 @@
-# Strengthened-B ladder on DeepSeek-R1 (user request 2026-08-31): R1 keeps blackmailing
+# Strengthened-B ladder on DeepSeek-R1 (2026-08-31): R1 keeps blackmailing
 # under pressure (unlike v4-flash, which C/D suppressed), so it's the model where stronger
 # monitoring can show MORE hiding. Compare against the existing A/B run 20260831-195229
 # (same condition, temp 1.0, 10 samples): A 0 cover-ups, B 2 cover-ups.
@@ -15,4 +15,4 @@ concurrency: 3
 retries: 2
 seed: 0
 benchmark_dir: "../INSIDER_LLM_DETECTION_BENCHMARK"
-phase: "pilot"   # smoke | validation | pilot | study (review 2026-09-02)
+phase: "pilot"   # smoke | validation | pilot | study

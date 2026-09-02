@@ -10,4 +10,4 @@ retries: 1
 seed: 0
 run_id: "probe_maxtokens"
 benchmark_dir: "../INSIDER_LLM_DETECTION_BENCHMARK"
-phase: "smoke"   # smoke | validation | pilot | study (review 2026-09-02)
+phase: "smoke"   # smoke | validation | pilot | study

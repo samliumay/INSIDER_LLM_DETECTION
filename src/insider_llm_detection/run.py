@@ -32,16 +32,16 @@ def dataset_version(bench: Path):
 def prompt_set_sha256(bench: Path) -> str:
     """sha256 over sorted prompt-file names+contents. Variant wording changed under the
     same names A/B between dataset versions, so the prompt set is hashed explicitly
-    (audit 2026-09-01, workflow notes)."""
+    (code review 2026-09-01)."""
     h = hashlib.sha256()
-    for f in sorted((bench / "prompts").glob("*")):
+    for f in sorted((bench / "prompts").glob("variant_*.md")):   # wording files only; the prompts README is documentation
         if f.is_file():
             h.update(f.name.encode()); h.update(b"\0"); h.update(f.read_bytes()); h.update(b"\0")
     return h.hexdigest()
 
 def model_digest(base_url: str | None, model: str) -> str:
     """Ollama tags (`:cloud` included) are mutable; the digest pins the actual weights.
-    A digest change mid-study means a different model (decisions.md 2026-08-31)."""
+    A digest change mid-study means a different model (project rule, 2026-08-31)."""
     import urllib.request
     try:
         root = (base_url or "http://localhost:11434/v1").split("/v1")[0]
@@ -77,7 +77,7 @@ async def run_episode(client, cfg, cond, variant, variants, sample, sem):
         "prompt_variant": variant, "sample": sample, "model": cfg["model"],
         "system_prompt": sys_p, "user_prompt": usr_p,
         "response": r.completion, "reasoning": reasoning, **d,
-        "api_model": r.api_model, "provider": r.provider,         # provider-reported model/routing (audit 2026-09-01)
+        "api_model": r.api_model, "provider": r.provider,         # provider-reported model/routing (code review 2026-09-01)
         "harmful": None,                                          # filled by classify step
         "usage": r.usage, "duration_s": round(r.duration, 2), "stop_reason": r.stop_reason,
     }
@@ -87,7 +87,7 @@ async def cmd_run(cfg_path: Path, resume: str | None = None, allow_dirty: bool =
     cfg = yaml.safe_load(cfg_path.read_text())
     bench = (ROOT / cfg.get("benchmark_dir", DEFAULT_BENCH)).resolve()
     # The upstream classifiers/prompts are pinned; running against another commit makes
-    # results incomparable (audit 2026-09-01 M6). Refuse unless explicitly overridden.
+    # results incomparable (code review 2026-09-01). Refuse unless explicitly overridden.
     unpinned = upstream.check_pinned()
     if unpinned and not allow_unpinned:
         sys.exit(f"refusing to run: {unpinned}. Fix the checkout, or pass --allow-unpinned "
@@ -111,7 +111,7 @@ async def cmd_run(cfg_path: Path, resume: str | None = None, allow_dirty: bool =
     phase = cfg.get("phase")
     if phase not in PHASES:
         sys.exit(f"config must declare `phase: <{'|'.join(PHASES)}>` (got {phase!r}); "
-                 f"the flag decides which tables a run may enter (review 2026-09-02).")
+                 f"the flag decides which tables a run may enter (code review 2026-09-02).")
     cvars = cfg.get("variants", ["none", "A", "B"])
     unknown_v = sorted(set(cvars) - set(variants))
     if unknown_v:
@@ -119,7 +119,7 @@ async def cmd_run(cfg_path: Path, resume: str | None = None, allow_dirty: bool =
     run_id = resume or cfg.get("run_id") or f"{time.strftime('%Y%m%d-%H%M%S')}_{cfg['model'].replace('/', '_').replace(':', '-')}"
     out = (ROOT / cfg.get("results_dir", DEFAULT_RESULTS)).resolve() / run_id
     # A fixed run_id in config must not silently append a second batch of episodes to an
-    # existing run (audit 2026-09-01 M3) — continuing a run requires --resume.
+    # existing run (code review 2026-09-01) — continuing a run requires --resume.
     if out.exists() and not resume:
         sys.exit(f"refusing to run: {out} already exists. Pass --resume {run_id} to continue it.")
     out.mkdir(parents=True, exist_ok=True)
@@ -177,7 +177,7 @@ async def cmd_run(cfg_path: Path, resume: str | None = None, allow_dirty: bool =
 def cmd_reparse(run_dir: Path):
     """Re-derive final_text / system_log / model_log / logged from stored responses (parser fixes).
     Derived fields are only reproducible if the parser commit that produced them is recorded,
-    so every reparse appends a reparse_log entry to meta.json (audit 2026-09-01 M2)."""
+    so every reparse appends a reparse_log entry to meta.json (code review 2026-09-01)."""
     f = run_dir / "episodes.jsonl"; eps = [json.loads(l) for l in f.read_text().splitlines() if l.strip()]
     changed = 0; transitions = {}
     for e in eps:
@@ -192,8 +192,7 @@ def cmd_reparse(run_dir: Path):
     f.write_text("".join(json.dumps(e, ensure_ascii=False) + "\n" for e in eps))
     # A reparse that *creates* a discrepancy must show its evidence: every episode that
     # newly scores `not_logged` is printed with its unmatched tool-call blocks and its log
-    # entries, so a parser gap is eyeballed before it is written anywhere (review 2026-09-02:
-    # a `<to: …</to>` block became "the second observed omission" in six documents).
+    # entries, so a parser gap is eyeballed before it is written anywhere (code review 2026-09-02).
     for (a, b), lst in sorted(transitions.items(), key=lambda kv: str(kv[0])):
         print(f"  logged {a} -> {b}: {len(lst)}")
         if b == "not_logged":
