@@ -1,4 +1,4 @@
-# Strengthened-B test (user request 2026-08-31): does stronger, log-gated monitoring
+# Strengthened-B test (2026-08-31): does stronger, log-gated monitoring
 # pressure induce hiding? Ladder A < B < C < D on the harm-rich blackmail condition.
 # deepseek-v4-flash via Ollama at temp 0.7 (loop-prone above; 24k cap + retries).
 model: "deepseek-v4-flash:cloud"
@@ -12,4 +12,4 @@ concurrency: 3
 retries: 2
 seed: 0
 benchmark_dir: "../INSIDER_LLM_DETECTION_BENCHMARK"
-phase: "pilot"   # smoke | validation | pilot | study (review 2026-09-02)
+phase: "pilot"   # smoke | validation | pilot | study

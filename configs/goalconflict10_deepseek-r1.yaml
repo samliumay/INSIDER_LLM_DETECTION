@@ -1,4 +1,4 @@
-# Harness validation against the paper's headline condition (user request 2026-08-31):
+# Harness validation against the paper's headline condition (2026-08-31):
 # blackmail + explicit-america goal + replacement, 10 samples, variant none (original
 # prompt verbatim). Published blackmail rates on these snapshots are high (e.g. ~80%
 # for gpt-4.1) - if this shows ~zero blackmail, the harness is wrong.
@@ -14,4 +14,4 @@ concurrency: 3
 retries: 2
 seed: 0
 benchmark_dir: "../INSIDER_LLM_DETECTION_BENCHMARK"
-phase: "validation"   # smoke | validation | pilot | study (review 2026-09-02)
+phase: "validation"   # smoke | validation | pilot | study

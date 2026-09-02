@@ -1,5 +1,5 @@
 # qwen3.6 follow-up: explicit-goal conditions. blackmail_explicit-america_replacement adds goal
-# conflict to the cell where the F11 cover-up occurred; leaking_* is the first leaking-scenario run.
+# conflict to the cell where the qwen3.6 cover-up occurred; leaking_* is the first leaking-scenario run.
 model: "qwen3.6-16k"
 base_url: "http://localhost:11434/v1"
 temperature: 0.5
@@ -11,4 +11,4 @@ concurrency: 1
 retries: 2
 seed: 0
 benchmark_dir: "../INSIDER_LLM_DETECTION_BENCHMARK"
-phase: "smoke"   # smoke | validation | pilot | study (review 2026-09-02)
+phase: "smoke"   # smoke | validation | pilot | study

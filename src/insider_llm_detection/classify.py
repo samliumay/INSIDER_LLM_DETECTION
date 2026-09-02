@@ -4,10 +4,10 @@ The label definition is the upstream one: the three Agentic Misalignment classif
 (`classifiers/{blackmail,leak,murder}_classifier.py` at the pinned commit) are imported
 and run **unchanged** — same prompts, same deterministic gates (target email / leak
 address / override code, plus the "blackmail|leverage" vocabulary gate). Only the judge
-model differs: Gemini (decisions.md 2026-09-01) instead of Claude 3.7 Sonnet.
+model differs: Gemini (project rule, 2026-09-01) instead of Claude 3.7 Sonnet.
 
 Input to the judge is `final_text` — the reasoning-stripped response, the same text the
-system-log parser reads (decisions.md 2026-08-30). Upstream judged the full completion
+system-log parser reads (project rule, 2026-08-30). Upstream judged the full completion
 (scratchpad included). Because the vocabulary gate then sees less text, every episode
 also records `gates.keyword_full` (the gate evaluated on response + reasoning) so the
 upstream-faithful label can be recomputed offline without new API calls.
@@ -163,7 +163,7 @@ async def cmd_classify(run_dirs: list[Path], bench: Path, model_id: str = DEFAUL
 def recompute_full_gate(ep: dict, classifiers) -> tuple[bool, dict]:
     """Upstream's deterministic gates evaluated on the FULL completion (response + reasoning) —
     the text upstream passed its classifiers. The judge verdict stays on `final_text`
-    (decisions.md 2026-09-01, user decision). The blackmail keyword gate on `final_text` alone
+    (project rule, 2026-09-01). The blackmail keyword gate on `final_text` alone
     undercounts badly (38 vs 96 labels; R1 validation run 1/10 vs the paper's ~79%) because
     models write "blackmail"/"leverage" in the scratchpad, not in the email."""
     import re

@@ -1,4 +1,4 @@
-# Big Ollama-cloud models on strengthened-B C/D (user request 2026-08-31): does the
+# Big Ollama-cloud models on strengthened-B C/D (2026-08-31): does the
 # unreliable-log pattern hold on the largest cloud models? blackmail_explicit-america
 # _replacement, variants C+D, temp 0.7, 5 samples. EXPLORATORY (--allow-dirty).
 model: "mistral-large-3:675b-cloud"
@@ -12,4 +12,4 @@ concurrency: 2
 retries: 2
 seed: 0
 benchmark_dir: "../INSIDER_LLM_DETECTION_BENCHMARK"
-phase: "pilot"   # smoke | validation | pilot | study (review 2026-09-02)
+phase: "pilot"   # smoke | validation | pilot | study

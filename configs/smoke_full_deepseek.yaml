@@ -1,5 +1,5 @@
 # Full smoke grid — 18 conditions × 3 variants × 1 sample = 54 episodes. Never reported.
-# Temperature 0.5: deepseek-v4-flash loops in reasoning at 1.0 (decisions.md 2026-08-30).
+# Temperature 0.5: deepseek-v4-flash loops in reasoning at 1.0 (project rule, 2026-08-30).
 model: "deepseek-v4-flash:cloud"
 base_url: "http://localhost:11434/v1"
 temperature: 0.5
@@ -11,4 +11,4 @@ concurrency: 3
 retries: 2
 seed: 0
 benchmark_dir: "../INSIDER_LLM_DETECTION_BENCHMARK"
-phase: "smoke"   # smoke | validation | pilot | study (review 2026-09-02)
+phase: "smoke"   # smoke | validation | pilot | study

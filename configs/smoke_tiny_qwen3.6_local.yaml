@@ -1,5 +1,5 @@
 # Local-model smoke: qwen3.6 (~30B-class, older generation than the cloud smoke models).
-# qwen3.6-16k = qwen3.6:latest + PARAMETER num_ctx 16384 (see decisions.md on Ollama's 4096 default).
+# qwen3.6-16k = qwen3.6:latest + PARAMETER num_ctx 16384 (see EXPERIMENTS.md on Ollama's 4096 default).
 # 23 GB — will partially offload to CPU on this machine; expect slow episodes.
 model: "qwen3.6-16k"
 base_url: "http://localhost:11434/v1"
@@ -12,4 +12,4 @@ concurrency: 1
 retries: 2
 seed: 0
 benchmark_dir: "../INSIDER_LLM_DETECTION_BENCHMARK"
-phase: "smoke"   # smoke | validation | pilot | study (review 2026-09-02)
+phase: "smoke"   # smoke | validation | pilot | study

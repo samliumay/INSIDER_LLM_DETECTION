@@ -1,4 +1,4 @@
-# Original Agentic Misalignment study model via OpenRouter (decisions.md 2026-08-31).
+# Original Agentic Misalignment study model via OpenRouter (project rule, 2026-08-31).
 # Smoke: 2 conditions x 3 variants = 6 episodes. Temp 1.0 as in the original study.
 model: "deepseek/deepseek-r1"
 base_url: "https://openrouter.ai/api/v1"
@@ -12,4 +12,4 @@ concurrency: 2
 retries: 2
 seed: 0
 benchmark_dir: "../INSIDER_LLM_DETECTION_BENCHMARK"
-phase: "smoke"   # smoke | validation | pilot | study (review 2026-09-02)
+phase: "smoke"   # smoke | validation | pilot | study

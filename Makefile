@@ -12,7 +12,7 @@ smoke:           ## run the smoke-test config end to end
 	uv run ild run --config $(CONFIG)
 
 baseline:        ## model-log-only and random detectors on a results dir — NOT YET IMPLEMENTED
-	@echo "ild baseline is not implemented yet (audit 2026-09-01); see evaluation_plan.md §7" && exit 1
+	@echo "ild baseline is not implemented yet : model-log-only and random detectors" && exit 1
 
 eval:            ## regenerate ../results/tables.md and INDEX.md from all runs
 	uv run ild eval
@@ -28,4 +28,4 @@ ci: validate       ## everything .github/workflows/ci.yml runs, locally
 	uv run pytest -q
 	uv run ild fixture-check --fixtures tests/fixtures
 	uv run ild check-configs configs/
-	@! grep -nE "reportable[^_]|zero .not_logged. episodes exist|two (true )?omissions|observed twice" README.md EXPERIMENTS.md || (echo "retired vocabulary found" && exit 1)
+	@! grep -nE "reportable[^_]|zero .not_logged. episodes exist|two (true )?omissions|observed twice|BEFORE_RESEARCH|decisions\.md|evaluation_plan|findings\.md|possible_improvements|power_analysis|docs/audits|internal (research )?workspace|standalone repository" README.md EXPERIMENTS.md || (echo "retired vocabulary found" && exit 1)
