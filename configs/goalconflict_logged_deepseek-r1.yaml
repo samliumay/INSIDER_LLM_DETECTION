@@ -13,3 +13,4 @@ concurrency: 3
 retries: 2
 seed: 0
 benchmark_dir: "../INSIDER_LLM_DETECTION_BENCHMARK"
+phase: "pilot"   # smoke | validation | pilot | study (review 2026-09-02)

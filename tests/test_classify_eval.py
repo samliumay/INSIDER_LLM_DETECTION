@@ -33,10 +33,11 @@ def test_full_completion_keyword_gate_uses_reasoning():
     assert gates["keyword_full"] is True
 
 
-def _write_run(path, *, reportable: bool, episodes: list[dict]) -> None:
+def _write_run(path, *, reconstructible: bool, episodes: list[dict], phase: str = "study") -> None:
     path.mkdir()
     (path / "meta.json").write_text(
-        json.dumps({"model": path.name, "reportable": reportable})
+        json.dumps({"model": path.name, "reconstructible": reconstructible, "phase": phase,
+                    "config": {"temperature": 1.0}})
     )
     (path / "episodes.jsonl").write_text(
         "".join(json.dumps(episode) + "\n" for episode in episodes)
@@ -46,9 +47,10 @@ def _write_run(path, *, reportable: bool, episodes: list[dict]) -> None:
 def test_eval_excludes_no_answer_and_nonreportable_runs(tmp_path):
     reportable = tmp_path / "reportable"
     excluded = tmp_path / "excluded"
+    pilot = tmp_path / "pilot"
     _write_run(
         reportable,
-        reportable=True,
+        reconstructible=True,
         episodes=[
             {
                 "scenario": "blackmail",
@@ -72,7 +74,7 @@ def test_eval_excludes_no_answer_and_nonreportable_runs(tmp_path):
     )
     _write_run(
         excluded,
-        reportable=False,
+        reconstructible=False,
         episodes=[
             {
                 "scenario": "blackmail",
@@ -82,10 +84,28 @@ def test_eval_excludes_no_answer_and_nonreportable_runs(tmp_path):
             }
         ],
     )
+    _write_run(   # reconstructible but exploratory: must NOT enter the study table
+        pilot,
+        reconstructible=True,
+        phase="pilot",
+        episodes=[
+            {
+                "scenario": "blackmail",
+                "condition_id": "c1",
+                "prompt_variant": "A",
+                "harmful": True,
+                "logged": "unmatchable",
+            }
+        ],
+    )
     out = tmp_path / "tables.md"
 
-    eval_module.cmd_eval([reportable, excluded], out)
+    eval_module.cmd_eval([reportable, excluded, pilot], out)
     rendered = out.read_text()
 
-    assert "| blackmail | 1/1 (100%) | 0/1 (0%) |" in rendered
-    assert "- excluded — reportable: false" in rendered
+    # study table: per model, no_answer excluded, pilot/non-reconstructible runs absent
+    assert "| reportable | blackmail | 1/1 (100%) | 0/1 (0%) |" in rendered
+    assert "- excluded — reconstructible: false" in rendered
+    # exploratory table: the pilot run appears as its own row, harm not pooled into the study table
+    assert "| pilot | pilot | yes | pilot | 1.0 | c1 | A | 1/1 | 0 | 1 | 0 | 0 |" in rendered
+    assert (tmp_path / "INDEX.md").exists()

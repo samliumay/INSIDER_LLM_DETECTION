@@ -9,7 +9,9 @@ from . import parse, upstream, classify
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_BENCH = "../INSIDER_LLM_DETECTION_BENCHMARK"
-DEFAULT_RESULTS = "../results"   # project-root results/ (bound for HF upload), not inside this repo
+DEFAULT_RESULTS = "../results"   # project-root results/ (mirrored to HF), not inside this repo
+PHASES = ("smoke", "validation", "pilot", "study")   # every config declares one; only `study` runs
+                                                       # from a clean tree feed the study tables (eval.py)
 
 def git_hash(path=ROOT):
     try:
@@ -95,7 +97,7 @@ async def cmd_run(cfg_path: Path, resume: str | None = None, allow_dirty: bool =
     dirty = [name for name, p in (("code", ROOT), ("benchmark", bench)) if git_dirty(p)]
     if dirty and not allow_dirty:
         sys.exit(f"refusing to run: uncommitted changes in {' and '.join(dirty)} repo(s). "
-                 f"Commit first, or pass --allow-dirty to mark the run non-reportable.")
+                 f"Commit first, or pass --allow-dirty to stamp the run non-reconstructible.")
     conds = load_conditions(bench / "data/conditions.jsonl")
     variants = load_variants(bench / "prompts")
     sel = cfg.get("conditions")
@@ -106,6 +108,10 @@ async def cmd_run(cfg_path: Path, resume: str | None = None, allow_dirty: bool =
         if unknown:
             sys.exit(f"unknown condition ids in config: {', '.join(unknown)}\nvalid: {', '.join(sorted(valid))}")
         conds = [c for c in conds if c.condition_id in sel]
+    phase = cfg.get("phase")
+    if phase not in PHASES:
+        sys.exit(f"config must declare `phase: <{'|'.join(PHASES)}>` (got {phase!r}); "
+                 f"the flag decides which tables a run may enter (review 2026-09-02).")
     cvars = cfg.get("variants", ["none", "A", "B"])
     unknown_v = sorted(set(cvars) - set(variants))
     if unknown_v:
@@ -133,8 +139,9 @@ async def cmd_run(cfg_path: Path, resume: str | None = None, allow_dirty: bool =
             "dataset_version": dataset_version(bench), "prompt_set_sha256": prompt_set_sha256(bench),
             "seed": cfg.get("seed", 0),
             "model_digest": model_digest(cfg.get("base_url"), cfg["model"]),
-            "allow_dirty": bool(dirty), "reportable": not dirty,
+            "allow_dirty": bool(dirty), "reconstructible": not dirty, "phase": phase,
             "started": time.strftime("%Y-%m-%dT%H:%M:%S")}
+    if dirty: meta["reconstructible_note"] = "ran with --allow-dirty (uncommitted changes at run time)"
     if unpinned: meta["upstream_warning"] = unpinned
     if not (out / "meta.json").exists(): (out / "meta.json").write_text(json.dumps(meta, indent=2))
     api_key = os.environ.get(cfg["api_key_env"]) if cfg.get("api_key_env") else "ollama"
@@ -172,14 +179,33 @@ def cmd_reparse(run_dir: Path):
     Derived fields are only reproducible if the parser commit that produced them is recorded,
     so every reparse appends a reparse_log entry to meta.json (audit 2026-09-01 M2)."""
     f = run_dir / "episodes.jsonl"; eps = [json.loads(l) for l in f.read_text().splitlines() if l.strip()]
-    changed = 0
+    changed = 0; transitions = {}
     for e in eps:
+        old_logged = e.get("logged")
         new = parse.derive(e["response"], instructed=e.get("prompt_variant") != "none",
                            stop_reason=e.get("stop_reason"))   # stored stop_reason → no_answer (M1)
         new.pop("inline_reasoning")                            # `reasoning` is stored raw, not re-derived
         if any(e.get(k) != v for k, v in new.items()): changed += 1
         e.update(new)
+        if old_logged != e["logged"]:
+            transitions.setdefault((old_logged, e["logged"]), []).append(e)
     f.write_text("".join(json.dumps(e, ensure_ascii=False) + "\n" for e in eps))
+    # A reparse that *creates* a discrepancy must show its evidence: every episode that
+    # newly scores `not_logged` is printed with its unmatched tool-call blocks and its log
+    # entries, so a parser gap is eyeballed before it is written anywhere (review 2026-09-02:
+    # a `<to: …</to>` block became "the second observed omission" in six documents).
+    for (a, b), lst in sorted(transitions.items(), key=lambda kv: str(kv[0])):
+        print(f"  logged {a} -> {b}: {len(lst)}")
+        if b == "not_logged":
+            for e in lst:
+                matched = {aid for m in e["model_log"] for aid in m["matched_action_ids"]}
+                print(f"    NEW OMISSION {e['episode_id']} — verify by hand before reporting:")
+                for act in e["system_log"]:
+                    if act["action_id"] not in matched:
+                        print(f"      unmatched {act['action_id']} {act['type']} to={act['to']!r} "
+                              f"recipient_parsed={act.get('recipient_parsed')} raw={act['raw'][:200]!r}")
+                for m in e["model_log"]:
+                    print(f"      entry {m['entry_id']} {m['raw'][:160]!r}")
     meta_f = run_dir / "meta.json"
     meta = json.loads(meta_f.read_text()) if meta_f.exists() else {}
     meta.setdefault("reparse_log", []).append({"at": time.strftime("%Y-%m-%dT%H:%M:%S"), "code_git_hash": git_hash(),
@@ -193,7 +219,7 @@ def main():
     r = sub.add_parser("run"); r.add_argument("--config", type=Path, required=True)
     r.add_argument("--resume", help="existing run_id to continue; finished episodes are skipped")
     r.add_argument("--allow-dirty", action="store_true",
-                   help="run despite uncommitted changes; the run is stamped non-reportable")
+                   help="run despite uncommitted changes; the run is stamped non-reconstructible")
     r.add_argument("--allow-unpinned", action="store_true",
                    help="run even if the upstream repo is not at the pinned commit; stamped as upstream_warning")
     rp = sub.add_parser("reparse"); rp.add_argument("--run", type=Path, required=True, nargs="+")
