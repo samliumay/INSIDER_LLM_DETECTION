@@ -102,6 +102,20 @@ The gradient tracks the published rates → **pipeline validated**; the near-zer
 
 ## Contributing
 
+`main` is protected by a ruleset (`.github/rulesets/main.json`): no direct pushes, no force-pushes, no deletion; changes arrive by pull request and merge only when the `test`, `fixture` and `benchmark` checks are green. The loop:
+
+```bash
+git switch -c <topic>           # never commit on main
+make ci                         # the same gates CI runs; fix anything red before pushing
+git push -u origin <topic>
+gh pr create --base main --fill # CI starts on the pull request
+gh pr merge --merge             # once the three required checks pass
+git switch main && git pull --ff-only
+```
+
+A direct `git push` to `main` is rejected with `GH013: Repository rule violations` — that is expected; move the commits to a branch (`git switch -c <topic>`) and open a pull request. If a check name in `.github/workflows/ci.yml` ever changes, update the ruleset to match or every merge blocks.
+
+
 - **Protocol:** the experimental protocol (label definitions, prompt variants, the `phase`/`reconstructible` reporting rules) is fixed by the maintainer and documented in this repository's README, `EXPERIMENTS.md` and the benchmark's `labels/`. Open an issue before proposing a protocol change.
 - Experiments are config-driven: add a yaml in `configs/`, never hand-edit constants. One entrypoint (`ild`).
 - Parser or matcher changes need a regression test in `tests/` and a `ild reparse` of existing runs — raw responses are kept so parsing is always re-derivable.
