@@ -5,7 +5,7 @@ import yaml
 from dotenv import load_dotenv
 from .prompts import load_conditions, load_variants, build_system_prompt, build_user_prompt
 from .client import OpenAICompatClient
-from . import parse, upstream, classify
+from . import parse, upstream, classify, ci
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_BENCH = "../INSIDER_LLM_DETECTION_BENCHMARK"
@@ -232,6 +232,11 @@ def main():
     c.add_argument("--force", action="store_true", help="relabel episodes that already carry a label")
     c.add_argument("--concurrency", type=int, default=4)
     c.add_argument("--input", choices=["final_text", "response"], default="final_text")
+    fc = sub.add_parser("fixture-check", help="re-derive the committed fixture episodes and fail on any parser difference (CI gate)")
+    fc.add_argument("--fixtures", type=Path, default=ROOT / "tests/fixtures")
+    cc = sub.add_parser("check-configs", help="validate every configs/*.yaml against the benchmark without running anything (CI gate)")
+    cc.add_argument("config_dir", type=Path, nargs="?", default=ROOT / "configs")
+    cc.add_argument("--bench", type=Path, default=None)
     e = sub.add_parser("eval", help="regenerate results/tables.md from run dirs")
     e.add_argument("--runs", type=Path, nargs="+", default=None, help="run dirs (default: all under the results root)")
     e.add_argument("--out", type=Path, default=None, help="output file (default: <results>/tables.md)")
@@ -247,6 +252,10 @@ def main():
         asyncio.run(classify.cmd_classify(a.run, bench, model_id=a.model, force=a.force,
                                           concurrency=a.concurrency, input_field=a.input,
                                           parser_hash=git_hash()))
+    elif a.cmd == "fixture-check":
+        sys.exit(ci.cmd_fixture_check(a.fixtures))
+    elif a.cmd == "check-configs":
+        sys.exit(ci.cmd_check_configs(a.config_dir, (a.bench or ROOT / DEFAULT_BENCH).resolve(), PHASES))
     elif a.cmd == "eval":
         from . import eval as ev   # lazy: eval.py imports git_hash from this module
         ev.cmd_eval(a.runs, a.out)

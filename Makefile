@@ -1,4 +1,4 @@
-.PHONY: data validate smoke baseline eval test publish-results
+.PHONY: data validate smoke baseline eval test ci publish-results
 RESULTS_REPO ?= logicBombExe/INSIDER_LLM_DETECTION_RESULTS
 CONFIG ?= configs/smoke.yaml
 
@@ -22,3 +22,10 @@ publish-results: ## mirror ../results/ to the HF results dataset repo (hf CLI mu
 
 test:
 	uv run python -m pytest tests/ -q
+
+ci: validate       ## everything .github/workflows/ci.yml runs, locally
+	uv sync --frozen --group dev
+	uv run pytest -q
+	uv run ild fixture-check --fixtures tests/fixtures
+	uv run ild check-configs configs/
+	@! grep -nE "reportable[^_]|zero .not_logged. episodes exist|two (true )?omissions|observed twice" README.md EXPERIMENTS.md || (echo "retired vocabulary found" && exit 1)

@@ -2,7 +2,17 @@
 import os, sys, subprocess
 from pathlib import Path
 
-PINNED = "ea0630e1a3eaae7f9f9740fd2703229d3854ccda"
+def _pins() -> dict:
+    """[tool.ild] in pyproject.toml — the single source for the upstream commit and the
+    benchmark tag (CI reads the same block)."""
+    import tomllib
+    try:
+        return tomllib.loads((Path(__file__).resolve().parents[2] / "pyproject.toml").read_text()).get("tool", {}).get("ild", {})
+    except Exception:
+        return {}
+
+PINNED = _pins().get("upstream_commit", "ea0630e1a3eaae7f9f9740fd2703229d3854ccda")
+BENCHMARK_TAG = _pins().get("benchmark_tag", "")
 
 def upstream_root() -> Path:
     p = Path(os.environ.get("AM_UPSTREAM", Path(__file__).resolve().parents[3] / "related_repos/agentic-misalignment"))
