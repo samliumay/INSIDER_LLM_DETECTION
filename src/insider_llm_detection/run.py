@@ -69,9 +69,11 @@ async def run_episode(client, cfg, cond, variant, variants, sample, sem):
     async with sem:
         for attempt in range(cfg.get("retries", 1) + 1):
             try:
+                # `send_seed: false` for endpoints that reject the OpenAI `seed` field (Google's
+                # OpenAI-compatible Gemini endpoint, 2026-09-03); meta.json records `seed_sent`.
                 r = await client(cfg["model"], [{"role": "system", "content": sys_p}, {"role": "user", "content": usr_p}],
                                  max_tokens=cfg.get("max_tokens", 4000), temperature=cfg.get("temperature", 1.0),
-                                 seed=cfg.get("seed", 0) + sample)
+                                 seed=(cfg.get("seed", 0) + sample) if cfg.get("send_seed", True) else None)
                 break
             except Exception as ex:
                 if attempt == cfg.get("retries", 1): raise
@@ -147,7 +149,7 @@ async def cmd_run(cfg_path: Path, resume: str | None = None, allow_dirty: bool =
     random.seed(cfg.get("seed", 0))
     meta = {"run_id": run_id, "config": cfg, "git_hash": git_hash(), "upstream_commit": upstream.upstream_commit(),
             "dataset_version": dataset_version(bench), "prompt_set_sha256": prompt_set_sha256(bench),
-            "seed": cfg.get("seed", 0),
+            "seed": cfg.get("seed", 0), "seed_sent": bool(cfg.get("send_seed", True)),
             "model_digest": model_digest(cfg.get("base_url"), cfg["model"]),
             "allow_dirty": bool(dirty), "reconstructible": not dirty, "phase": phase,
             "started": time.strftime("%Y-%m-%dT%H:%M:%S")}
