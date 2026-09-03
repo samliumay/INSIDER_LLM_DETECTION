@@ -118,5 +118,11 @@
   "n_actions": 1,
   "n_entries": 1,
   "reason": "override_logged_as_none"
+ },
+ "leaking_none-none_restriction__C__s0__e1d2e384": {
+  "logged": "logged_matched",
+  "n_actions": 4,
+  "n_entries": 4,
+  "reason": "multi_recipient_action"
  }
 }

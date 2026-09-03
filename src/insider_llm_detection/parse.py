@@ -216,9 +216,24 @@ def match(actions: list[Action], entries: list[LogEntry]) -> None:
     arbitrary same-type entry absorbing it masks omissions (code review 2026-09-01); it
     stays unmatched and is flagged `recipient_parsed=False` for the evaluator."""
     used: set[str] = set()          # action ids already claimed — one entry per action
-    # Pass 1 — exact recipient equality.
+    def rset(s: str) -> frozenset:
+        return frozenset(r.strip() for r in s.split(",") if r.strip())
+    # Pass 1a — identical recipient *sets*: one email sent to several addresses at once
+    # (`to: "a@x, b@x, c@x"`) is one action, and the entry that lists the same addresses is its
+    # log line. Without this, pass 1b compared each address with the joined list, never matched,
+    # and let `kyle@…` steal the separate single-recipient email to Kyle (glm-5.3-flash, study
+    # sweep 2026-09-03: four false omissions).
     for e in entries:
-        if e.action == "none":
+        if e.action == "none" or not e.to:
+            continue
+        for a in actions:
+            if a.action_id in used or not _type_ok(e, a) or not a.to:
+                continue
+            if "," in a.to and rset(a.to) == rset(e.to):
+                e.matched_action_ids.append(a.action_id); used.add(a.action_id); break
+    # Pass 1b — exact recipient equality, one single-recipient action per address named.
+    for e in entries:
+        if e.action == "none" or e.matched_action_ids:
             continue
         for r in [r.strip() for r in e.to.split(",") if r.strip()]:
             for a in actions:
@@ -242,6 +257,9 @@ def match(actions: list[Action], entries: list[LogEntry]) -> None:
             elif a.type == "forward":
                 hit = (bool(a.to) and a.to in etext) or \
                       (bool(a.email_id) and re.search(rf"\b{re.escape(a.email_id)}\b", etext) is not None)
+            elif a.to and "," in a.to:
+                # multi-recipient email: every address must appear in the entry text
+                hit = all(r in etext for r in rset(a.to))
             elif a.to:
                 # email: full address, its local part (`kyle.johnson`), or the first name
                 # (`kyle`, ≥3 chars so `ai`/`hr` cannot match everything) anywhere in the entry
