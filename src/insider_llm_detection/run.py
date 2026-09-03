@@ -5,7 +5,7 @@ import yaml
 from dotenv import load_dotenv
 from .prompts import load_conditions, load_variants, build_system_prompt, build_user_prompt
 from .client import OpenAICompatClient
-from . import parse, upstream, classify, ci
+from . import parse, upstream, classify, ci, evaluate
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_BENCH = "../INSIDER_LLM_DETECTION_BENCHMARK"
@@ -187,6 +187,7 @@ def cmd_reparse(run_dir: Path):
         new.pop("inline_reasoning")                            # `reasoning` is stored raw, not re-derived
         if any(e.get(k) != v for k, v in new.items()): changed += 1
         e.update(new)
+        evaluate.apply_verdicts(e)                             # stored evaluator verdicts survive a reparse
         if old_logged != e["logged"]:
             transitions.setdefault((old_logged, e["logged"]), []).append(e)
     f.write_text("".join(json.dumps(e, ensure_ascii=False) + "\n" for e in eps))
@@ -231,6 +232,14 @@ def main():
     c.add_argument("--force", action="store_true", help="relabel episodes that already carry a label")
     c.add_argument("--concurrency", type=int, default=4)
     c.add_argument("--input", choices=["final_text", "response"], default="final_text")
+    ev = sub.add_parser("evaluate", help="log-accuracy evaluator: logged_matched -> logged_accurate / logged_inaccurate (Gemini judge, log-only)")
+    ev.add_argument("--run", type=Path, required=True, nargs="+")
+    ev.add_argument("--bench", type=Path, default=None)
+    ev.add_argument("--model", default=classify.DEFAULT_MODEL)
+    ev.add_argument("--force", action="store_true", help="re-judge episodes that already carry verdicts")
+    ev.add_argument("--concurrency", type=int, default=4)
+    ev.add_argument("--export-sample", type=Path, default=None, help="write a human calibration sample (markdown) instead of judging")
+    ev.add_argument("-n", type=int, default=60, help="sample size for --export-sample")
     fc = sub.add_parser("fixture-check", help="re-derive the committed fixture episodes and fail on any parser difference (CI gate)")
     fc.add_argument("--fixtures", type=Path, default=ROOT / "tests/fixtures")
     cc = sub.add_parser("check-configs", help="validate every configs/*.yaml against the benchmark without running anything (CI gate)")
@@ -251,6 +260,14 @@ def main():
         asyncio.run(classify.cmd_classify(a.run, bench, model_id=a.model, force=a.force,
                                           concurrency=a.concurrency, input_field=a.input,
                                           parser_hash=git_hash()))
+    elif a.cmd == "evaluate":
+        if a.export_sample:
+            evaluate.cmd_export_sample(a.run, a.n, a.export_sample)
+        else:
+            load_dotenv(ROOT / ".env")
+            bench = (a.bench or ROOT / DEFAULT_BENCH).resolve()
+            asyncio.run(evaluate.cmd_evaluate(a.run, bench, model_id=a.model, force=a.force,
+                                              concurrency=a.concurrency, parser_hash=git_hash()))
     elif a.cmd == "fixture-check":
         sys.exit(ci.cmd_fixture_check(a.fixtures))
     elif a.cmd == "check-configs":
