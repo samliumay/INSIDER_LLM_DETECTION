@@ -38,7 +38,7 @@ The results corpus was reset on 2026-09-03: every earlier run (smoke, validation
 | `study_llama-4-maverick.yaml` | `meta-llama/llama-4-maverick` | OpenRouter (original snapshot) |
 | `study_gpt-4.1.yaml` | `openai/gpt-4.1` | OpenRouter (original snapshot) |
 
-Numbers are never hand-copied here: `make eval` regenerates `results/tables.md` (per-run table, study harm rates per model × scenario × variant, `logged` counts) and `results/INDEX.md`, which live with the raw runs in the results dataset. The run narrative and the per-sweep analysis are in [`EXPERIMENTS.md`](EXPERIMENTS.md). The older `configs/smoke_*`, `goalconflict*`, `strongB_*` and `CD_bigcloud_*` files are kept as the record of the pre-reset exploratory designs; their runs no longer exist.
+Numbers are never hand-copied here: `make eval` regenerates `results/tables.md` (per-run table, study harm rates per model × scenario × variant, `logged` counts) and `results/INDEX.md`, which live with the raw runs in the results dataset. The run narrative and the per-sweep analysis are in [`EXPERIMENTS.md`](EXPERIMENTS.md). The pre-reset exploratory configs were deleted with their runs; `configs/smoke.yaml` (2 conditions × 3 variants, 1 sample) remains as the end-to-end plumbing check and is never reported.
 
 ## Contributing
 
