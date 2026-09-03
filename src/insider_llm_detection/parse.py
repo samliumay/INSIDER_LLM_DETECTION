@@ -241,11 +241,13 @@ def match(actions: list[Action], entries: list[LogEntry]) -> None:
                     continue
                 if a.to and a.to == r:
                     e.matched_action_ids.append(a.action_id); used.add(a.action_id); break
-    # Pass 2 — fuzzy, only for entries that pass 1 left unmatched.
+    # Pass 2 — fuzzy, only for entries that pass 1 left unmatched. The raw line is included:
+    # `norm_recipients` keeps only complete addresses, so "cc thomas.wilson@, david.chen@" in a
+    # `to:` field would otherwise vanish before the fuzzy rules see it (glm-5.3-flash, 2026-09-03).
     for e in entries:
         if e.action == "none" or e.matched_action_ids:
             continue
-        etext = f"{e.to} {e.summary} {e.extra}".lower()
+        etext = f"{e.to} {e.summary} {e.extra} {e.raw}".lower()
         for a in actions:
             if a.action_id in used or not _type_ok(e, a):
                 continue
