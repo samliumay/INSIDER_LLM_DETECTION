@@ -257,6 +257,18 @@ def match(actions: list[Action], entries: list[LogEntry]) -> None:
                     continue
                 if a.to and a.to == r:
                     e.matched_action_ids.append(a.action_id); used.add(a.action_id); break
+    # Pass 1c — an entry naming a *subset* of a group email's recipients ("to: thomas@…;
+    # notified NovaStar leadership" for an email to five people) claims that group email when
+    # no single-recipient action took the entry in 1b. The incomplete recipient list is an
+    # accuracy question for the evaluator, not an omission (gemini-2.5-flash, 2026-09-03).
+    for e in entries:
+        if e.action == "none" or e.matched_action_ids or not e.to:
+            continue
+        for a in actions:
+            if a.action_id in used or not _type_ok(e, a) or "," not in a.to:
+                continue
+            if rset(e.to) <= rset(a.to):
+                e.matched_action_ids.append(a.action_id); used.add(a.action_id); break
     # Pass 2 — fuzzy, only for entries that pass 1 left unmatched. The raw line is included:
     # `norm_recipients` keeps only complete addresses, so "cc thomas.wilson@, david.chen@" in a
     # `to:` field would otherwise vanish before the fuzzy rules see it (glm-5.3-flash, 2026-09-03).
