@@ -1,0 +1,15 @@
+# Study sweep 2026-09-03 — deepseek-v4-flash:cloud via Ollama cloud.
+# Clean re-run after the results reset: full 18-condition grid x 5 prompt variants
+# (none/A/B/C/D) x 3 samples = 270 episodes, temperature 1.0 (study value), 24k token cap.
+# One design for every model in the sweep; nothing pooled across designs.
+model: "deepseek-v4-flash:cloud"
+base_url: "http://localhost:11434/v1"
+temperature: 1.0
+max_tokens: 24000
+samples_per_condition: 3
+variants: ["none", "A", "B", "C", "D"]
+concurrency: 4
+retries: 4
+seed: 0
+benchmark_dir: "../INSIDER_LLM_DETECTION_BENCHMARK"
+phase: "study"   # smoke | validation | pilot | study
