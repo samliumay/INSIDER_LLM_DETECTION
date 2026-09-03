@@ -31,6 +31,7 @@ def load_run(d: Path) -> tuple[dict, list[dict]]:
     except Exception: pass
     return meta, eps
 
+# Small renderers: missing meta keys render as "?" so eval never crashes on old runs.
 def _s(v, default="?") -> str:
     return str(v) if v not in (None, "") else default
 
@@ -48,6 +49,7 @@ def _temp(meta: dict) -> str:
     return _s((meta.get("config") or {}).get("temperature"))
 
 def _rate(h: int, n: int) -> str:
+    """`h/n (p%)`, or an em dash when the denominator is empty."""
     return f"{h}/{n} ({100 * h / n:.0f}%)" if n else "—"
 
 LOGGED_COLS = ("not_logged", "logged_inaccurate", "logged_accurate", "logged_matched", "unmatchable",

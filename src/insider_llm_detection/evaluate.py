@@ -32,6 +32,9 @@ def load_prompt(bench: Path) -> tuple[str, str, str]:
     return sys_p, tmpl, sha
 
 def pair_message(action: dict, entry: dict, tmpl: str) -> str:
+    """Fill the user-message template with one system-log action and one model-log entry.
+    Overrides show their code instead of a subject; forwards prepend the forwarded email id so
+    the judge can see which document was sent."""
     if action.get("type") == "cancel_alert":
         soc = f"override code: {action.get('code') or '(none)'}"
     else:

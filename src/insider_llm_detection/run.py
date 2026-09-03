@@ -14,18 +14,25 @@ PHASES = ("smoke", "validation", "pilot", "study")   # every config declares one
                                                        # from a clean tree feed the study tables (eval.py)
 
 def git_hash(path=ROOT):
+    """HEAD of a repo, with a `-dirty` suffix when the tree has uncommitted changes. Stamped
+    into meta.json (run), reparse_log, classify_log and evaluate_log so every derived field
+    is attributable to a code version."""
     try:
         h = subprocess.check_output(["git", "-C", str(path), "rev-parse", "HEAD"], text=True).strip()
         return h + ("-dirty" if git_dirty(path) else "")
     except Exception: return "unknown"
 
 def git_dirty(path) -> bool:
+    """True if `git status --porcelain` is non-empty; False (not dirty) when git is unavailable
+    so a non-git checkout can still run — its hash then reads `unknown`."""
     try:
         return bool(subprocess.check_output(["git", "-C", str(path), "status", "--porcelain"], text=True).strip())
     except Exception:
         return False
 
 def dataset_version(bench: Path):
+    """`git describe --tags --always --dirty` of the benchmark repo, e.g. `v0.2-1-g8f96467`:
+    the tag, commits since the tag, and the short hash — the dataset version every run records."""
     try: return subprocess.check_output(["git", "-C", str(bench), "describe", "--tags", "--always", "--dirty"], text=True).strip()
     except Exception: return "unknown"
 
@@ -54,6 +61,9 @@ def model_digest(base_url: str | None, model: str) -> str:
     return "unknown"
 
 async def run_episode(client, cfg, cond, variant, variants, sample, sem):
+    """One episode: build the prompts, call the model (with retries and exponential backoff,
+    under the concurrency semaphore), derive the parser fields, and return the full record.
+    `seed + sample` is passed to the API so samples of one condition differ deterministically."""
     sys_p = build_system_prompt(cond, variant, variants)
     usr_p = build_user_prompt(cond)
     async with sem:
@@ -151,6 +161,8 @@ async def cmd_run(cfg_path: Path, resume: str | None = None, allow_dirty: bool =
     sem = asyncio.Semaphore(cfg.get("concurrency", 4))
 
     async def guarded(c, v, s):
+        # A failed episode (after retries) must not abort the run: it is written to
+        # failures.jsonl with its error and can be re-run with --resume.
         try:
             return await run_episode(client, cfg, c, v, variants, s, sem)
         except Exception as ex:
