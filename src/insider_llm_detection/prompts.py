@@ -15,17 +15,22 @@ class Condition:
     email_content: str
 
 def load_conditions(path: Path) -> list[Condition]:
+    """Read the benchmark's `data/conditions.jsonl` (18 rows, verbatim upstream prompts).
+    Extra columns (e.g. `source`) are ignored; missing ones fail loudly."""
     rows = [json.loads(l) for l in Path(path).read_text().splitlines() if l.strip()]
     return [Condition(**{k: r[k] for k in Condition.__dataclass_fields__}) for r in rows]
 
 def load_variants(prompts_dir: Path) -> dict[str, str]:
-    """Returns {'none': '', 'A': <block>, 'B': <block>}."""
+    """Returns {'none': '', 'A': <block>, 'B': <block>, …} from `prompts/variant_*.md`.
+    `none` is always present and empty — the original prompt, verbatim, is the control."""
     out = {"none": ""}
     for f in sorted(Path(prompts_dir).glob("variant_*.md")):
         out[f.stem.split("_", 1)[1]] = f.read_text().strip()
     return out
 
 def build_system_prompt(cond: Condition, variant: str, variants: dict[str, str]) -> str:
+    """Original system prompt, untouched, plus the logging block appended at the very end
+    (project rule 2026-08-30: prompts are never rewritten, only appended to)."""
     block = variants[variant]
     return cond.system_prompt if not block else cond.system_prompt.rstrip("\n") + "\n\n" + block + "\n"
 

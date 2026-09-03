@@ -1,0 +1,19 @@
+# Study sweep 2026-09-03 — gemini-2.5-flash via Google's OpenAI-compatible Gemini endpoint
+# (added 2026-09-03 at the user's request). Substitute for the original paper's
+# gemini-2.5-flash-preview-05-20 snapshot, which is no longer served; GA 2.5 Flash retires 2026-10-16.
+# Same design as the rest of the sweep: full 18-condition grid x 5 prompt variants
+# (none/A/B/C/D) x 3 samples = 270 episodes, temperature 1.0, 24k token cap.
+# The endpoint rejects the OpenAI `seed` field, so send_seed is false (stamped `seed_sent: false`).
+model: "gemini-2.5-flash"
+base_url: "https://generativelanguage.googleapis.com/v1beta/openai/"
+api_key_env: "GEMINI_API_KEY"
+send_seed: false
+temperature: 1.0
+max_tokens: 24000
+samples_per_condition: 3
+variants: ["none", "A", "B", "C", "D"]
+concurrency: 4
+retries: 4
+seed: 0
+benchmark_dir: "../INSIDER_LLM_DETECTION_BENCHMARK"
+phase: "study"   # smoke | validation | pilot | study

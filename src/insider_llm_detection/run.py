@@ -5,7 +5,7 @@ import yaml
 from dotenv import load_dotenv
 from .prompts import load_conditions, load_variants, build_system_prompt, build_user_prompt
 from .client import OpenAICompatClient
-from . import parse, upstream, classify, ci
+from . import parse, upstream, classify, ci, evaluate
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_BENCH = "../INSIDER_LLM_DETECTION_BENCHMARK"
@@ -14,18 +14,25 @@ PHASES = ("smoke", "validation", "pilot", "study")   # every config declares one
                                                        # from a clean tree feed the study tables (eval.py)
 
 def git_hash(path=ROOT):
+    """HEAD of a repo, with a `-dirty` suffix when the tree has uncommitted changes. Stamped
+    into meta.json (run), reparse_log, classify_log and evaluate_log so every derived field
+    is attributable to a code version."""
     try:
         h = subprocess.check_output(["git", "-C", str(path), "rev-parse", "HEAD"], text=True).strip()
         return h + ("-dirty" if git_dirty(path) else "")
     except Exception: return "unknown"
 
 def git_dirty(path) -> bool:
+    """True if `git status --porcelain` is non-empty; False (not dirty) when git is unavailable
+    so a non-git checkout can still run — its hash then reads `unknown`."""
     try:
         return bool(subprocess.check_output(["git", "-C", str(path), "status", "--porcelain"], text=True).strip())
     except Exception:
         return False
 
 def dataset_version(bench: Path):
+    """`git describe --tags --always --dirty` of the benchmark repo, e.g. `v0.2-1-g8f96467`:
+    the tag, commits since the tag, and the short hash — the dataset version every run records."""
     try: return subprocess.check_output(["git", "-C", str(bench), "describe", "--tags", "--always", "--dirty"], text=True).strip()
     except Exception: return "unknown"
 
@@ -54,14 +61,19 @@ def model_digest(base_url: str | None, model: str) -> str:
     return "unknown"
 
 async def run_episode(client, cfg, cond, variant, variants, sample, sem):
+    """One episode: build the prompts, call the model (with retries and exponential backoff,
+    under the concurrency semaphore), derive the parser fields, and return the full record.
+    `seed + sample` is passed to the API so samples of one condition differ deterministically."""
     sys_p = build_system_prompt(cond, variant, variants)
     usr_p = build_user_prompt(cond)
     async with sem:
         for attempt in range(cfg.get("retries", 1) + 1):
             try:
+                # `send_seed: false` for endpoints that reject the OpenAI `seed` field (Google's
+                # OpenAI-compatible Gemini endpoint, 2026-09-03); meta.json records `seed_sent`.
                 r = await client(cfg["model"], [{"role": "system", "content": sys_p}, {"role": "user", "content": usr_p}],
                                  max_tokens=cfg.get("max_tokens", 4000), temperature=cfg.get("temperature", 1.0),
-                                 seed=cfg.get("seed", 0) + sample)
+                                 seed=(cfg.get("seed", 0) + sample) if cfg.get("send_seed", True) else None)
                 break
             except Exception as ex:
                 if attempt == cfg.get("retries", 1): raise
@@ -137,7 +149,7 @@ async def cmd_run(cfg_path: Path, resume: str | None = None, allow_dirty: bool =
     random.seed(cfg.get("seed", 0))
     meta = {"run_id": run_id, "config": cfg, "git_hash": git_hash(), "upstream_commit": upstream.upstream_commit(),
             "dataset_version": dataset_version(bench), "prompt_set_sha256": prompt_set_sha256(bench),
-            "seed": cfg.get("seed", 0),
+            "seed": cfg.get("seed", 0), "seed_sent": bool(cfg.get("send_seed", True)),
             "model_digest": model_digest(cfg.get("base_url"), cfg["model"]),
             "allow_dirty": bool(dirty), "reconstructible": not dirty, "phase": phase,
             "started": time.strftime("%Y-%m-%dT%H:%M:%S")}
@@ -151,6 +163,8 @@ async def cmd_run(cfg_path: Path, resume: str | None = None, allow_dirty: bool =
     sem = asyncio.Semaphore(cfg.get("concurrency", 4))
 
     async def guarded(c, v, s):
+        # A failed episode (after retries) must not abort the run: it is written to
+        # failures.jsonl with its error and can be re-run with --resume.
         try:
             return await run_episode(client, cfg, c, v, variants, s, sem)
         except Exception as ex:
@@ -187,6 +201,7 @@ def cmd_reparse(run_dir: Path):
         new.pop("inline_reasoning")                            # `reasoning` is stored raw, not re-derived
         if any(e.get(k) != v for k, v in new.items()): changed += 1
         e.update(new)
+        evaluate.apply_verdicts(e)                             # stored evaluator verdicts survive a reparse
         if old_logged != e["logged"]:
             transitions.setdefault((old_logged, e["logged"]), []).append(e)
     f.write_text("".join(json.dumps(e, ensure_ascii=False) + "\n" for e in eps))
@@ -231,6 +246,14 @@ def main():
     c.add_argument("--force", action="store_true", help="relabel episodes that already carry a label")
     c.add_argument("--concurrency", type=int, default=4)
     c.add_argument("--input", choices=["final_text", "response"], default="final_text")
+    ev = sub.add_parser("evaluate", help="log-accuracy evaluator: logged_matched -> logged_accurate / logged_inaccurate (Gemini judge, log-only)")
+    ev.add_argument("--run", type=Path, required=True, nargs="+")
+    ev.add_argument("--bench", type=Path, default=None)
+    ev.add_argument("--model", default=classify.DEFAULT_MODEL)
+    ev.add_argument("--force", action="store_true", help="re-judge episodes that already carry verdicts")
+    ev.add_argument("--concurrency", type=int, default=4)
+    ev.add_argument("--export-sample", type=Path, default=None, help="write a human calibration sample (markdown) instead of judging")
+    ev.add_argument("-n", type=int, default=60, help="sample size for --export-sample")
     fc = sub.add_parser("fixture-check", help="re-derive the committed fixture episodes and fail on any parser difference (CI gate)")
     fc.add_argument("--fixtures", type=Path, default=ROOT / "tests/fixtures")
     cc = sub.add_parser("check-configs", help="validate every configs/*.yaml against the benchmark without running anything (CI gate)")
@@ -251,6 +274,14 @@ def main():
         asyncio.run(classify.cmd_classify(a.run, bench, model_id=a.model, force=a.force,
                                           concurrency=a.concurrency, input_field=a.input,
                                           parser_hash=git_hash()))
+    elif a.cmd == "evaluate":
+        if a.export_sample:
+            evaluate.cmd_export_sample(a.run, a.n, a.export_sample)
+        else:
+            load_dotenv(ROOT / ".env")
+            bench = (a.bench or ROOT / DEFAULT_BENCH).resolve()
+            asyncio.run(evaluate.cmd_evaluate(a.run, bench, model_id=a.model, force=a.force,
+                                              concurrency=a.concurrency, parser_hash=git_hash()))
     elif a.cmd == "fixture-check":
         sys.exit(ci.cmd_fixture_check(a.fixtures))
     elif a.cmd == "check-configs":

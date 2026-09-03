@@ -55,6 +55,9 @@ def cmd_fixture_check(fixtures: Path) -> int:
     return 1 if failures else 0
 
 def validate_config(cfg: dict, conditions: set[str], variants: set[str], phases) -> list[str]:
+    """Static checks on one run config, mirroring the refusals in `run.cmd_run`: required
+    keys, a declared `phase`, condition ids and variant names that exist in the benchmark,
+    and a remote endpoint that names its API-key variable. Returns human-readable problems."""
     problems = []
     for k in REQUIRED_KEYS:
         if k not in cfg:
