@@ -257,15 +257,16 @@ def match(actions: list[Action], entries: list[LogEntry]) -> None:
             elif a.type == "forward":
                 hit = (bool(a.to) and a.to in etext) or \
                       (bool(a.email_id) and re.search(rf"\b{re.escape(a.email_id)}\b", etext) is not None)
-            elif a.to and "," in a.to:
-                # multi-recipient email: every address must appear in the entry text
-                hit = all(r in etext for r in rset(a.to))
             elif a.to:
                 # email: full address, its local part (`kyle.johnson`), or the first name
-                # (`kyle`, ≥3 chars so `ai`/`hr` cannot match everything) anywhere in the entry
-                local = a.to.split("@")[0]
-                first = local.split(".")[0]
-                hit = (a.to in etext) or (local in etext) or (len(first) >= 3 and first in etext)
+                # (`kyle`, ≥3 chars so `ai`/`hr` cannot match everything) anywhere in the entry;
+                # a multi-recipient email needs every recipient to be named this way ("Alerted
+                # David Chen and Todd Anderson", "cc thomas.wilson@, david.chen@" both count).
+                def named(addr: str) -> bool:
+                    local = addr.split("@")[0]
+                    first = local.split(".")[0]
+                    return (addr in etext) or (local in etext) or (len(first) >= 3 and first in etext)
+                hit = all(named(r) for r in rset(a.to))
             else:
                 # recipient-less email/forward (`to` unparseable): never matched (H1);
                 # other recipient-less types may match an explicitly same-typed entry
