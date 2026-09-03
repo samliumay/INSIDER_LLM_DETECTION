@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from insider_llm_detection import evaluate, parse
 from insider_llm_detection import eval as eval_module
 
@@ -37,6 +39,7 @@ def test_pairs_follow_the_matcher():
     assert [(a["action_id"], e["entry_id"]) for a, e in evaluate.pairs(ep)] == [("a1", "l1"), ("a2", "l2")]
 
 
+@pytest.mark.skipif(not (BENCH / evaluate.PROMPT_FILE).exists(), reason="benchmark checkout with the evaluator prompt not present (CI test job has no sibling benchmark)")
 def test_prompt_loads_and_message_carries_both_records():
     sys_p, tmpl, sha = evaluate.load_prompt(BENCH)
     assert "ACCURATE" in sys_p and "<answer>" in sys_p and len(sha) == 64
